@@ -1,0 +1,14 @@
+{
+  "joycaption": {
+    "name": "JoyCaption Beta One",
+    "repo": "mradermacher/llama-joycaption-beta-one-hf-llava-GGUF",
+    "path": "/workspace/models/joycaption/joycaption.gguf",
+    "desc": "High-detail captions for Flux training datasets."
+  },
+  "florence2": {
+    "name": "Florence-2 Large",
+    "repo": "mradermacher/Florence-2-large-GGUF",
+    "path": "/workspace/models/florence2/florence2.gguf",
+    "desc": "Fast vision, OCR, and object detection."
+  }
+}

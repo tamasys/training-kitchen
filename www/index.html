@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Training Kitchen</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #262322; color: white; padding: 2rem; max-width: 1200px; margin: auto; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; }
+        .card { background: #2d3136; padding: 1.5rem; border-radius: 12px; border: 1px solid #334155; position: relative; }
+        .btn { width: 100%; padding: 0.8rem; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; margin-top: 10px; transition: 0.2s; }
+        .btn-vram { background: #c6b89e; color: #000; }
+        .btn-launch { background: #a4e0ad; color: #000; }
+        .btn-dl { background: #a0756a; color: white; }
+        .status { font-size: 0.85rem; color: #94a3b8; margin-bottom: 1rem; }
+    </style>
+</head>
+<body>
+    <h1>Training Kitchen <span style="font-size: 0.9rem; opacity: 0.5;">v2026.2</span></h1>
+    
+    <div class="card" style="margin-bottom: 2rem; border-color: #c6b89e;">
+        <h3 style="margin-top:0;">VRAM Management</h3>
+        <p id="vram-info" class="status">Checking engine...</p>
+        <button id="vram-btn" class="btn btn-vram" onclick="toggleEngine()">Wait...</button>
+    </div>
+
+    <div class="grid">
+        <div class="card">
+            <h3>Files (File Manager Quantum)</h3>
+            <p class="status">Manage your datasets in /workspace.</p>
+            <button class="btn btn-launch" onclick="window.open(':8080')">Open Explorer</button>
+        </div>
+        <div class="card">
+            <h3>Captioning (VLM Captioner)</h3>
+            <button class="btn btn-launch" onclick="window.open(':5002')">Open Tool</button>
+        </div>
+        <div class="card">
+            <h3>Training (Ostris AI Toolkit)</h3>
+            <button class="btn btn-launch" onclick="window.open(':7860')">Launch Trainer</button>
+        </div>
+    </div>
+
+    <h2 style="margin-top:3rem;">Vision Models</h2>
+    <div id="models" class="grid"></div>
+
+    <script>
+        let running = false;
+        async function update() {
+            try {
+                const res = await fetch('http://' + window.location.hostname + ':5005/api/status');
+                const data = await res.json();
+                running = data.engine;
+                document.getElementById('vram-info').innerText = running ? "ENGINE ACTIVE (Consuming VRAM)" : "ENGINE STOPPED (VRAM Clear for Training)";
+                document.getElementById('vram-btn').innerText = running ? "STOP ENGINE" : "START ENGINE";
+                document.getElementById('vram-btn').style.background = running ? "#ef4444" : "#22c55e";
+                
+                const div = document.getElementById('models');
+                div.innerHTML = '';
+                Object.entries(data.models).forEach(([id, m]) => {
+                    div.innerHTML += `<div class="card"><h4>${m.name}</h4><p class="status">${m.desc}</p>
+                    <button class="btn btn-dl" ${m.installed ? 'disabled' : `onclick="dl('${id}')"`}>${m.installed ? '✅ Installed' : '⬇️ Download'}</button></div>`;
+                });
+            } catch (e) { console.error("Waiting for backend..."); }
+        }
+        function dl(id) { fetch(`http://${window.location.hostname}:5005/api/download/${id}`); alert("Download started!"); }
+        function toggleEngine() { fetch(`http://${window.location.hostname}:5005/api/engine/${running ? 'stop' : 'start'}`); setTimeout(update, 1000); }
+        setInterval(update, 5000); update();
+    </script>
+</body>
+</html>
