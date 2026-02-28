@@ -5,11 +5,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y python3-pip git cmake ninja-build build-essential
 RUN pip3 install scikit-build-core[pyproject] setuptools
 
-# CUDA Build Flags
-ENV FORCE_CMAKE=1
-ENV CMAKE_ARGS="-DGGML_CUDA=on -DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs"
-ENV TORCH_CUDA_ARCH_LIST="7.0;7.5;8.0;8.6;8.9;9.0+PTX"
-
 # Compile llama-cpp-python once
 RUN pip3 wheel --no-cache-dir --wheel-dir=/root/wheels llama-cpp-python[server] --no-build-isolation
 
