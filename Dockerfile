@@ -3,6 +3,7 @@ FROM nvidia/cuda:12.2.2-devel-ubuntu22.04 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y python3-pip git cmake ninja-build build-essential
+RUN pip3 install scikit-build-core[pyproject] setuptools
 
 # CUDA Build Flags
 ENV FORCE_CMAKE=1
