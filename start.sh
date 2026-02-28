@@ -1,5 +1,5 @@
 #!/bin/bash
-echo "--- Initializing RunPod AI Suite ---"
+echo "--- Initializing Training Kitchen ---"
 
 # Ensure persistence
 mkdir -p /workspace/models /workspace/outputs /workspace/config

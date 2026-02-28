@@ -15,8 +15,10 @@ RUN pip3 install --no-cache-dir \
     "llama-cpp-python[server]" \
     --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu122
 
-# Install FileBrowser Quantum
-RUN curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
+# Install FileBrowser Quantum (gtsteffaniak/filebrowser) - update version pin as needed
+RUN curl -fsSL https://github.com/gtsteffaniak/filebrowser/releases/download/v1.2.1-stable/linux-amd64-filebrowser \
+    -o /usr/local/bin/filebrowser && \
+    chmod +x /usr/local/bin/filebrowser
 
 WORKDIR /app
 COPY . .
