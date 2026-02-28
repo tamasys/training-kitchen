@@ -3,13 +3,13 @@ FROM nvidia/cuda:12.2.2-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Minimal runtime dependencies
+# Runtime dependencies
 RUN apt-get update && apt-get install -y \
     python3-pip git curl nginx supervisor \
     libgl1-mesa-glx libglib2.0-0 jq \
     && rm -rf /var/lib/apt/lists/*
 
-# Install python dependencies including llama-cpp-python pre-built wheel for CUDA 12.2
+# Install Python dependencies including llama-cpp-python pre-built wheel for CUDA 12.2
 RUN pip3 install --no-cache-dir \
     huggingface_hub flask flask-cors \
     "llama-cpp-python[server]" \
@@ -20,9 +20,18 @@ RUN curl -fsSL https://github.com/gtsteffaniak/filebrowser/releases/download/v1.
     -o /usr/local/bin/filebrowser && \
     chmod +x /usr/local/bin/filebrowser
 
+# Bake in toolkits at build time for fast container startup.
+# The updater.sh script will git pull and conditionally reinstall on each boot.
+RUN git clone --depth=1 https://github.com/ostris/ai-toolkit.git /app/ai-toolkit && \
+    pip3 install -q --no-cache-dir -r /app/ai-toolkit/requirements.txt
+
+RUN git clone --depth=1 https://github.com/victorchall/vlm-caption.git /app/vlm-caption && \
+    pip3 install -q --no-cache-dir -r /app/vlm-caption/requirements.txt
+
+# Copy app files (separate layer so upstream repo changes don't bust this cache)
 WORKDIR /app
 COPY . .
-RUN chmod +x start.sh
+RUN chmod +x start.sh scripts/updater.sh
 
 # Install nginx dashboard config and remove default site
 RUN rm -f /etc/nginx/sites-enabled/default && \
