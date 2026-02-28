@@ -1,15 +1,7 @@
-# --- STAGE 1: The Builder ---
-FROM nvidia/cuda:12.2.2-devel-ubuntu22.04 AS builder
+# --- FINAL RUNNER ---
+FROM nvidia/cuda:12.2.2-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y python3-pip git cmake ninja-build build-essential
-RUN pip3 install scikit-build-core[pyproject] setuptools
-
-# Compile llama-cpp-python once
-RUN pip3 wheel --no-cache-dir --wheel-dir=/root/wheels llama-cpp-python[server] --no-build-isolation
-
-# --- STAGE 2: The Final Runner ---
-FROM nvidia/cuda:12.2.2-runtime-ubuntu22.04
 
 # Minimal runtime dependencies
 RUN apt-get update && apt-get install -y \
@@ -17,19 +9,18 @@ RUN apt-get update && apt-get install -y \
     libgl1-mesa-glx libglib2.0-0 jq \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy and install the pre-compiled wheel from Stage 1
-COPY --from=builder /root/wheels /root/wheels
-RUN pip3 install --no-cache-dir /root/wheels/*.whl
-
-# Install other Python tools
-RUN pip3 install --no-cache-dir huggingface_hub flask flask-cors
+# Install python dependencies including llama-cpp-python pre-built wheel for CUDA 12.2
+RUN pip3 install --no-cache-dir \
+    huggingface_hub flask flask-cors \
+    "llama-cpp-python[server]" \
+    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu122
 
 # Install FileBrowser Quantum
 RUN curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
 
 WORKDIR /app
 COPY . .
-RUN chmod +x start.sh scripts/*.sh
+RUN chmod +x start.sh
 
 # Ports: 80 (Dashboard), 8080 (Files), 5001 (LLM API), 5002 (VLM UI), 7860 (Ostris GUI)
 EXPOSE 80 8080 5001 5002 7860
