@@ -1,0 +1,11 @@
+# Ensure all shell scripts, configs, and source files use Unix LF in the repo
+* text=auto
+*.sh text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.conf text eol=lf
+*.py text eol=lf
+*.json text eol=lf
+*.html text eol=lf
+*.md text eol=lf
+Dockerfile text eol=lf

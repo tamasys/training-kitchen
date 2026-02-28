@@ -24,6 +24,10 @@ WORKDIR /app
 COPY . .
 RUN chmod +x start.sh
 
-# Ports: 80 (Dashboard), 8080 (Files), 5001 (LLM API), 5002 (VLM UI), 7860 (Ostris GUI)
-EXPOSE 80 8080 5001 5002 7860
+# Install nginx dashboard config and remove default site
+RUN rm -f /etc/nginx/sites-enabled/default && \
+    ln -s /app/nginx.conf /etc/nginx/sites-enabled/training-kitchen
+
+# Ports: 80 (Dashboard), 5005 (Coordinator API), 8080 (Files), 5001 (LLM API), 5002 (VLM UI), 7860 (Ostris GUI)
+EXPOSE 80 5005 8080 5001 5002 7860
 ENTRYPOINT ["/app/start.sh"]

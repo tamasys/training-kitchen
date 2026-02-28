@@ -22,15 +22,21 @@ def status():
 
 @app.route('/api/engine/<action>')
 def engine_ctl(action):
+    if action not in ('start', 'stop'):
+        return jsonify({"error": "invalid action"}), 400
     subprocess.run(['supervisorctl', action, 'llama_router'])
     return jsonify({"status": "ok"})
 
 @app.route('/api/download/<id>')
 def dl(id):
-    repo = get_registry()[id]['repo']
-    path = os.path.dirname(get_registry()[id]['path'])
+    registry = get_registry()
+    if id not in registry:
+        return jsonify({"error": "unknown model id"}), 404
+    entry = registry[id]
+    repo = entry['repo']
+    path = os.path.dirname(entry['path'])
     os.makedirs(path, exist_ok=True)
-    subprocess.Popen([f"huggingface-cli download {repo} --local-dir {path} --local-dir-use-symlinks False"], shell=True)
+    subprocess.Popen([f"huggingface-cli download {repo} --local-dir {path} --local-dir-use-symlinks=False"], shell=True)
     return jsonify({"status": "started"})
 
 if __name__ == "__main__":
