@@ -28,6 +28,10 @@ RUN git clone --depth=1 https://github.com/ostris/ai-toolkit.git /app/ai-toolkit
 RUN git clone --depth=1 https://github.com/victorchall/vlm-caption.git /app/vlm-caption && \
     pip3 install -q --no-cache-dir -r /app/vlm-caption/requirements.txt
 
+# flux_train_ui.py uses gr.Image(show_share_button=...) which was removed in Gradio 6.0.
+# Force-pin after toolkit installs to override whatever version they requested.
+RUN pip3 install -q --no-cache-dir "gradio>=4.0,<6.0"
+
 # Copy app files (separate layer so upstream repo changes don't bust this cache)
 WORKDIR /app
 COPY . .
