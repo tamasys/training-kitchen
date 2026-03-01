@@ -75,18 +75,15 @@
         <div class="card">
             <h3>Files (File Manager Quantum)</h3>
             <p class="status">Manage your datasets in /workspace.</p>
-            <button class="btn btn-launch" onclick="window.open('http://' + window.location.hostname + ':8080')">Open
-                Explorer</button>
+            <button class="btn btn-launch" onclick="window.open('/files/')">Open Explorer</button>
         </div>
         <div class="card">
             <h3>Captioning (VLM Captioner)</h3>
-            <button class="btn btn-launch" onclick="window.open('http://' + window.location.hostname + ':5002')">Open
-                Tool</button>
+            <button class="btn btn-launch" onclick="window.open('/vlm/')">Open Tool</button>
         </div>
         <div class="card">
             <h3>Training (Ostris AI Toolkit)</h3>
-            <button class="btn btn-launch" onclick="window.open('http://' + window.location.hostname + ':8675')">Launch
-                Trainer</button>
+            <button class="btn btn-launch" onclick="window.open('/trainer/')">Launch Trainer</button>
         </div>
     </div>
 
@@ -97,7 +94,7 @@
         let running = false;
         async function update() {
             try {
-                const res = await fetch('http://' + window.location.hostname + ':5005/api/status');
+                const res = await fetch('/api/status');
                 const data = await res.json();
                 running = data.engine;
                 document.getElementById('vram-info').innerText = running ? "ENGINE ACTIVE (Consuming VRAM)" : "ENGINE STOPPED (VRAM Clear for Training)";
@@ -112,8 +109,8 @@
                 });
             } catch (e) { console.error("Waiting for backend..."); }
         }
-        function dl(id) { fetch(`http://${window.location.hostname}:5005/api/download/${id}`); alert("Download started!"); }
-        function toggleEngine() { fetch(`http://${window.location.hostname}:5005/api/engine/${running ? 'stop' : 'start'}`); setTimeout(update, 1000); }
+        function dl(id) { fetch(`/api/download/${id}`); alert("Download started!"); }
+        function toggleEngine() { fetch(`/api/engine/${running ? 'stop' : 'start'}`); setTimeout(update, 1000); }
         setInterval(update, 5000); update();
     </script>
 </body>

@@ -1,0 +1,25 @@
+# Local development compose file.
+# Access everything through http://localhost:80 — nginx routes internally.
+# The other ports are exposed for direct access if needed (e.g. API testing).
+services:
+  training-kitchen:
+    image: training-kitchen:latest
+    ports:
+      - "80:80" # Dashboard + all tools via nginx (primary entry point)
+      - "8080:8080" # FileBrowser Quantum (direct)
+      - "5001:5001" # LLM API / llama_router (direct)
+      - "5002:5002" # VLM Captioner (direct)
+      - "5005:5005" # Coordinator API (direct)
+      - "8675:8675" # AI Toolkit UI (direct)
+    volumes:
+      - workspace:/workspace
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+
+volumes:
+  workspace:
