@@ -8,4 +8,4 @@ server:
 
 auth:
   methods:
-    noAuth: true
+    noauth: true
