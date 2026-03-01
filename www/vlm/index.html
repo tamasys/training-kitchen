@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VLM Captioner — Training Kitchen</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        :root {
+            --bg: #0f1117;
+            --surface: #181c24;
+            --surface2: #1e2330;
+            --border: #2a3144;
+            --accent: #6c8afc;
+            --accent-dim: rgba(108, 138, 252, 0.15);
+            --green: #4ade80;
+            --green-dim: rgba(74, 222, 128, 0.15);
+            --red: #f87171;
+            --red-dim: rgba(248, 113, 113, 0.15);
+            --amber: #fbbf24;
+            --text: #e2e8f0;
+            --muted: #64748b;
+            --radius: 10px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .logo {
+            font-size: 1.1rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logo span {
+            opacity: 0.4;
+            font-weight: 400;
+            font-size: 0.85rem;
+        }
+
+        .back-link {
+            color: var(--muted);
+            font-size: 0.8rem;
+            text-decoration: none;
+            margin-right: auto;
+        }
+
+        .back-link:hover {
+            color: var(--text);
+        }
+
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.3rem 0.8rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            transition: all 0.3s;
+        }
+
+        .status-pill .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--muted);
+            transition: background 0.3s;
+        }
+
+        .status-pill.running {
+            background: var(--green-dim);
+            border-color: var(--green);
+            color: var(--green);
+        }
+
+        .status-pill.running .dot {
+            background: var(--green);
+            box-shadow: 0 0 6px var(--green);
+            animation: pulse 1.5s infinite;
+        }
+
+        .status-pill.error {
+            background: var(--red-dim);
+            border-color: var(--red);
+            color: var(--red);
+        }
+
+        .status-pill.error .dot {
+            background: var(--red);
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
+        }
+
+        .btn {
+            padding: 0.5rem 1.1rem;
+            border-radius: var(--radius);
+            border: none;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .btn-start {
+            background: var(--green);
+            color: #000;
+        }
+
+        .btn-start:hover {
+            background: #22c55e;
+            transform: translateY(-1px);
+        }
+
+        .btn-stop {
+            background: var(--red);
+            color: #000;
+        }
+
+        .btn-stop:hover {
+            background: #ef4444;
+            transform: translateY(-1px);
+        }
+
+        .btn-save {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .btn-save:hover {
+            background: #7c9fff;
+            transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .main {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 0;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Config panel */
+        .config-panel {
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            overflow-y: auto;
+            padding: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .section-title {
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 0.75rem;
+        }
+
+        .card {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1rem;
+        }
+
+        label {
+            display: block;
+            font-size: 0.78rem;
+            color: var(--muted);
+            margin-bottom: 0.3rem;
+            font-weight: 500;
+        }
+
+        .field {
+            margin-bottom: 0.85rem;
+        }
+
+        .field:last-child {
+            margin-bottom: 0;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 0.5rem 0.7rem;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            font-size: 0.82rem;
+            transition: border-color 0.2s;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        textarea {
+            resize: vertical;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            min-height: 80px;
+        }
+
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.82rem;
+            cursor: pointer;
+        }
+
+        .checkbox-row input {
+            width: auto;
+        }
+
+        .hint-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+        }
+
+        .hint-chip {
+            padding: 0.25rem 0.6rem;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: var(--bg);
+            user-select: none;
+        }
+
+        .hint-chip.active {
+            background: var(--accent-dim);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .prompts-help {
+            font-size: 0.7rem;
+            color: var(--muted);
+            margin-top: 0.3rem;
+        }
+
+        /* Log panel */
+        .log-panel {
+            display: flex;
+            flex-direction: column;
+            background: var(--bg);
+            overflow: hidden;
+        }
+
+        .log-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .log-toolbar .label {
+            font-size: 0.75rem;
+            color: var(--muted);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .log-toolbar .spacer {
+            flex: 1;
+        }
+
+        .autoscroll-label {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.75rem;
+            color: var(--muted);
+            cursor: pointer;
+        }
+
+        .btn-clear {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--muted);
+            padding: 0.25rem 0.6rem;
+            font-size: 0.72rem;
+        }
+
+        .btn-clear:hover {
+            border-color: var(--text);
+            color: var(--text);
+        }
+
+        #log {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            line-height: 1.7;
+            white-space: pre-wrap;
+            word-break: break-all;
+            color: #94a3b8;
+        }
+
+        #log .line-complete {
+            color: var(--green);
+        }
+
+        #log .line-cancelled {
+            color: var(--amber);
+        }
+
+        #log .line-error {
+            color: var(--red);
+        }
+
+        #log .line-info {
+            color: var(--accent);
+        }
+
+        #log .timestamp {
+            color: var(--muted);
+            font-size: 0.65rem;
+        }
+
+        .progress-bar-wrap {
+            height: 3px;
+            background: var(--border);
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0;
+            background: var(--accent);
+            transition: width 0.3s;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .main {
+                grid-template-columns: 1fr;
+            }
+
+            .config-panel {
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+                max-height: 50vh;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <div class="logo">🖼️ VLM Captioner <span>Training Kitchen</span></div>
+        <a href="/" class="back-link">← Dashboard</a>
+        <div class="status-pill" id="statusPill">
+            <div class="dot"></div>
+            <span id="statusText">Idle</span>
+        </div>
+        <button class="btn btn-save" id="saveBtn" onclick="saveConfig()">Save Config</button>
+        <button class="btn btn-start" id="startBtn" onclick="startCaptioning()">▶ Start</button>
+        <button class="btn btn-stop" id="stopBtn" onclick="stopCaptioning()" style="display:none">■ Stop</button>
+    </header>
+
+    <div class="progress-bar-wrap">
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+
+    <div class="main">
+        <!-- Config Panel -->
+        <div class="config-panel">
+
+            <div class="card">
+                <div class="section-title">Source</div>
+                <div class="field">
+                    <label>Image Folder</label>
+                    <input type="text" id="base_directory" placeholder="/workspace/datasets/my-dataset">
+                </div>
+                <div class="field" style="display:flex; gap:1rem;">
+                    <label class="checkbox-row"><input type="checkbox" id="recursive"> Recursive</label>
+                    <label class="checkbox-row"><input type="checkbox" id="skip_if_txt_exists"> Skip if .txt
+                        exists</label>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="section-title">LLM Endpoint</div>
+                <div class="field">
+                    <label>Base URL</label>
+                    <input type="text" id="base_url" placeholder="http://localhost:5001/v1">
+                </div>
+                <div class="field">
+                    <label>Model</label>
+                    <input type="text" id="model" placeholder="e.g. llava-v1.6-mistral-7b">
+                </div>
+                <div class="field">
+                    <label>API Key (leave blank for local)</label>
+                    <input type="text" id="api_key" placeholder="sk-...">
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="section-title">Generation</div>
+                <div class="field" style="display:flex;gap:0.75rem;">
+                    <div style="flex:1">
+                        <label>Max Tokens</label>
+                        <input type="number" id="max_tokens" min="256" max="32768" step="256">
+                    </div>
+                    <div style="flex:1">
+                        <label>Batch Size</label>
+                        <input type="number" id="concurrent_batch_size" min="1" max="16">
+                    </div>
+                </div>
+                <div class="field">
+                    <label>System Prompt</label>
+                    <textarea id="system_prompt" rows="5"></textarea>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="section-title">Prompts <span
+                        style="font-size:0.65rem;color:var(--muted);text-transform:none;font-weight:400">(one per line —
+                        run in sequence)</span></div>
+                <div class="field">
+                    <textarea id="prompts" rows="6"></textarea>
+                    <div class="prompts-help">Each line is sent as a separate message. The final line becomes the
+                        caption.</div>
+                </div>
+            </div>
+
+            <div class="card" id="hintSourcesCard">
+                <div class="section-title">Hint Sources</div>
+                <div class="hint-chips" id="hintChips"></div>
+            </div>
+
+        </div>
+
+        <!-- Log Panel -->
+        <div class="log-panel">
+            <div class="log-toolbar">
+                <span class="label">Output</span>
+                <span class="spacer"></span>
+                <label class="autoscroll-label">
+                    <input type="checkbox" id="autoscroll" checked> Auto-scroll
+                </label>
+                <button class="btn btn-clear" onclick="clearLog()">Clear</button>
+            </div>
+            <div id="log"></div>
+        </div>
+    </div>
+
+    <script>
+        let captioningRunning = false;
+        let eventSource = null;
+        let allHintSources = {};
+        let activeHintSources = new Set();
+
+        // ── Hint Sources ──────────────────────────────────────────
+        async function loadHintSources() {
+            try {
+                const res = await fetch('/api/hint_sources');
+                const data = await res.json();
+                if (!data.success) return;
+                allHintSources = data.hint_sources;
+                const chips = document.getElementById('hintChips');
+                chips.innerHTML = '';
+                Object.entries(allHintSources).forEach(([key, info]) => {
+                    const chip = document.createElement('div');
+                    chip.className = 'hint-chip';
+                    chip.textContent = info.display_name || key;
+                    chip.title = info.description || '';
+                    chip.dataset.key = key;
+                    chip.onclick = () => {
+                        if (activeHintSources.has(key)) { activeHintSources.delete(key); chip.classList.remove('active'); }
+                        else { activeHintSources.add(key); chip.classList.add('active'); }
+                    };
+                    chips.appendChild(chip);
+                });
+            } catch (e) { log('Failed to load hint sources', 'error'); }
+        }
+
+        // ── Config ────────────────────────────────────────────────
+        async function loadConfig() {
+            try {
+                const res = await fetch('/api/config');
+                const data = await res.json();
+                if (!data.success) { log('Failed to load config: ' + (data.error || ''), 'error'); return; }
+                const c = data.config;
+                document.getElementById('base_directory').value = c.base_directory || '/workspace';
+                document.getElementById('base_url').value = c.base_url || 'http://localhost:5001/v1';
+                document.getElementById('model').value = c.model || '';
+                document.getElementById('api_key').value = c.api_key || '';
+                document.getElementById('max_tokens').value = c.max_tokens || 4096;
+                document.getElementById('concurrent_batch_size').value = c.concurrent_batch_size || 1;
+                document.getElementById('system_prompt').value = c.system_prompt || '';
+                document.getElementById('recursive').checked = c.recursive !== false;
+                document.getElementById('skip_if_txt_exists').checked = c.skip_if_txt_exists !== false;
+                if (Array.isArray(c.prompts)) {
+                    document.getElementById('prompts').value = c.prompts.join('\n');
+                }
+                // Activate hint sources from config
+                activeHintSources = new Set(c.hint_sources || []);
+                document.querySelectorAll('.hint-chip').forEach(chip => {
+                    if (activeHintSources.has(chip.dataset.key)) chip.classList.add('active');
+                });
+                log('Config loaded.', 'info');
+            } catch (e) { log('Error loading config: ' + e.message, 'error'); }
+        }
+
+        async function saveConfig() {
+            const prompts = document.getElementById('prompts').value
+                .split('\n').map(s => s.trim()).filter(Boolean);
+            const config = {
+                base_directory: document.getElementById('base_directory').value,
+                base_url: document.getElementById('base_url').value,
+                model: document.getElementById('model').value,
+                api_key: document.getElementById('api_key').value,
+                max_tokens: parseInt(document.getElementById('max_tokens').value),
+                concurrent_batch_size: parseInt(document.getElementById('concurrent_batch_size').value),
+                system_prompt: document.getElementById('system_prompt').value,
+                recursive: document.getElementById('recursive').checked,
+                skip_if_txt_exists: document.getElementById('skip_if_txt_exists').checked,
+                prompts,
+                hint_sources: [...activeHintSources],
+            };
+            try {
+                const res = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ config })
+                });
+                const data = await res.json();
+                log(data.success ? '✓ Config saved.' : '✗ Save failed: ' + data.error, data.success ? 'info' : 'error');
+            } catch (e) { log('Error saving config: ' + e.message, 'error'); }
+        }
+
+        // ── Captioning ────────────────────────────────────────────
+        async function startCaptioning() {
+            await saveConfig();
+            setRunning(true);
+            log('─── Starting captioning job ───', 'info');
+
+            if (eventSource) eventSource.close();
+            eventSource = new EventSource('/api/run');
+
+            eventSource.onmessage = (e) => {
+                const msg = e.data.trim();
+                if (!msg || msg === '[KEEPALIVE]') return;
+                if (msg.startsWith('[COMPLETE]')) {
+                    log('─── Captioning complete. ───', 'complete');
+                    setRunning(false);
+                    eventSource.close();
+                } else if (msg.startsWith('[CANCELLED]')) {
+                    log('─── Captioning cancelled. ───', 'cancelled');
+                    setRunning(false);
+                    eventSource.close();
+                } else if (msg.startsWith('[ERROR]')) {
+                    log(msg, 'error');
+                    setRunning(false);
+                    eventSource.close();
+                } else if (msg.startsWith('[STARTED]')) {
+                    log(msg.replace('[STARTED]', '').trim(), 'info');
+                } else {
+                    log(msg);
+                }
+            };
+
+            eventSource.onerror = () => {
+                if (!captioningRunning) return;
+                log('Connection lost or captioning ended.', 'error');
+                setRunning(false);
+            };
+        }
+
+        async function stopCaptioning() {
+            try {
+                await fetch('/api/stop', { method: 'POST' });
+                log('Stop signal sent…', 'info');
+            } catch (e) { log('Error sending stop: ' + e.message, 'error'); }
+        }
+
+        // ── Status polling ─────────────────────────────────────────
+        async function pollStatus() {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+                if (data.captioning_in_progress !== captioningRunning) {
+                    setRunning(data.captioning_in_progress);
+                }
+            } catch { /* backend not ready */ }
+        }
+
+        // ── UI helpers ─────────────────────────────────────────────
+        function setRunning(running) {
+            captioningRunning = running;
+            const pill = document.getElementById('statusPill');
+            const text = document.getElementById('statusText');
+            const bar = document.getElementById('progressBar');
+            document.getElementById('startBtn').style.display = running ? 'none' : '';
+            document.getElementById('stopBtn').style.display = running ? '' : 'none';
+            document.getElementById('saveBtn').disabled = running;
+            pill.className = 'status-pill' + (running ? ' running' : '');
+            text.textContent = running ? 'Running' : 'Idle';
+            bar.style.width = running ? '100%' : '0';
+            bar.style.background = running ? 'var(--green)' : 'var(--accent)';
+        }
+
+        function log(msg, type = '') {
+            const el = document.getElementById('log');
+            const line = document.createElement('div');
+            const ts = new Date().toLocaleTimeString('en-GB', { hour12: false });
+            const tsSpan = `<span class="timestamp">[${ts}]</span> `;
+            line.className = type ? `line-${type}` : '';
+            line.innerHTML = tsSpan + escapeHtml(msg);
+            el.appendChild(line);
+            if (document.getElementById('autoscroll').checked) {
+                el.scrollTop = el.scrollHeight;
+            }
+        }
+
+        function escapeHtml(s) {
+            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function clearLog() { document.getElementById('log').innerHTML = ''; }
+
+        // ── Init ──────────────────────────────────────────────────
+        (async () => {
+            await loadHintSources();
+            await loadConfig();
+            setInterval(pollStatus, 5000);
+        })();
+    </script>
+</body>
+
+</html>
