@@ -180,7 +180,7 @@
 
         .main {
             display: grid;
-            grid-template-columns: 380px 1fr;
+            grid-template-columns: 1fr 1fr;
             gap: 0;
             flex: 1;
             overflow: hidden;
@@ -414,7 +414,6 @@
 
     <header>
         <div class="logo">🖼️ VLM Captioner <span>Training Kitchen</span></div>
-        <a href="/" class="back-link">← Dashboard</a>
         <div class="status-pill" id="statusPill">
             <div class="dot"></div>
             <span id="statusText">Idle</span>
@@ -436,7 +435,7 @@
                 <div class="section-title">Source</div>
                 <div class="field">
                     <label>Image Folder</label>
-                    <input type="text" id="base_directory" placeholder="/workspace/datasets/my-dataset">
+                    <input type="text" id="base_directory" placeholder="/workspace/my-dataset (inside FileBrowser)">
                 </div>
                 <div class="field" style="display:flex; gap:1rem;">
                     <label class="checkbox-row"><input type="checkbox" id="recursive"> Recursive</label>
@@ -448,16 +447,19 @@
             <div class="card">
                 <div class="section-title">LLM Endpoint</div>
                 <div class="field">
-                    <label>Base URL</label>
-                    <input type="text" id="base_url" placeholder="http://localhost:5001/v1">
+                    <label>Base URL (Local LLM Engine)</label>
+                    <input type="text" id="base_url" readonly
+                        style="background: var(--surface2); color: var(--muted); cursor: not-allowed;">
                 </div>
                 <div class="field">
                     <label>Model</label>
-                    <input type="text" id="model" placeholder="e.g. llava-v1.6-mistral-7b">
+                    <select id="model">
+                        <option value="">Loading models...</option>
+                    </select>
                 </div>
                 <div class="field">
                     <label>API Key (leave blank for local)</label>
-                    <input type="text" id="api_key" placeholder="sk-...">
+                    <input type="text" id="api_key" placeholder="Not required for local models">
                 </div>
             </div>
 
@@ -541,6 +543,51 @@
             } catch (e) { log('Failed to load hint sources', 'error'); }
         }
 
+        // ── Tool Helpers ──────────────────────────────────────────
+        function getToolUrl(port) {
+            const runpod = location.hostname.match(/^(.+)-(\d+)(\.proxy\.runpod\.net)$/);
+            if (runpod) {
+                return `${location.protocol}//${runpod[1]}-${port}${runpod[3]}`;
+            }
+            return `${location.protocol}//${location.hostname}:${port}`;
+        }
+
+        async function loadModels() {
+            const select = document.getElementById('model');
+            try {
+                // Get models from the coordinator API. 
+                // Since we are moving this UI to 5002, we can't use /api/ directly if the coordinator is on 80.
+                // We use getToolUrl(80) to hit the main nginx reverse proxy.
+                const url = getToolUrl(80) + '/api/status';
+                const res = await fetch(url);
+                const data = await res.json();
+
+                select.innerHTML = '';
+
+                // Look for installed models
+                let hasModels = false;
+                Object.entries(data.models).forEach(([id, m]) => {
+                    if (m.installed) {
+                        const opt = document.createElement('option');
+                        opt.value = id;
+                        opt.textContent = m.name;
+                        select.appendChild(opt);
+                        hasModels = true;
+                    }
+                });
+
+                if (!hasModels) {
+                    const opt = document.createElement('option');
+                    opt.value = "";
+                    opt.textContent = "No models installed. Download from Dashboard.";
+                    select.appendChild(opt);
+                }
+            } catch (e) {
+                select.innerHTML = '<option value="">Failed to load models</option>';
+                log('Failed to fetch installed models from Coordinator API', 'error');
+            }
+        }
+
         // ── Config ────────────────────────────────────────────────
         async function loadConfig() {
             try {
@@ -548,9 +595,26 @@
                 const data = await res.json();
                 if (!data.success) { log('Failed to load config: ' + (data.error || ''), 'error'); return; }
                 const c = data.config;
+
+                // Set Base Directory
                 document.getElementById('base_directory').value = c.base_directory || '/workspace';
-                document.getElementById('base_url').value = c.base_url || 'http://localhost:5001/v1';
-                document.getElementById('model').value = c.model || '';
+
+                // Always force Base URL to the correct internal LLM endpoint
+                document.getElementById('base_url').value = getToolUrl(5001) + '/v1';
+
+                // Set Model (if present in dropdown)
+                if (c.model) {
+                    const select = document.getElementById('model');
+                    // Ensure the option exists if it was saved, even if it's not "installed" right now
+                    if (!Array.from(select.options).some(opt => opt.value === c.model)) {
+                        const opt = document.createElement('option');
+                        opt.value = c.model;
+                        opt.textContent = c.model + ' (Offline)';
+                        select.appendChild(opt);
+                    }
+                    select.value = c.model;
+                }
+
                 document.getElementById('api_key').value = c.api_key || '';
                 document.getElementById('max_tokens').value = c.max_tokens || 4096;
                 document.getElementById('concurrent_batch_size').value = c.concurrent_batch_size || 1;
@@ -688,6 +752,7 @@
 
         // ── Init ──────────────────────────────────────────────────
         (async () => {
+            await loadModels(); // Load models dropdown first
             await loadHintSources();
             await loadConfig();
             setInterval(pollStatus, 5000);
