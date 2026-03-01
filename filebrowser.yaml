@@ -1,10 +1,11 @@
 server:
   port: 8080
   database: "/app/filebrowser.db"
+  cacheDir: "/app/filebrowser-cache"
+  sources:
+    - path: /workspace
+      name: Workspace
 
 auth:
-  method: noauth
-
-sources:
-  - name: Workspace
-    path: /workspace
+  methods:
+    noAuth: true
