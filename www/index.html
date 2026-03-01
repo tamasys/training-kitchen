@@ -75,15 +75,15 @@
         <div class="card">
             <h3>Files (File Manager Quantum)</h3>
             <p class="status">Manage your datasets in /workspace.</p>
-            <button class="btn btn-launch" onclick="window.open('/files/')">Open Explorer</button>
+            <button class="btn btn-launch" onclick="window.open(getToolUrl(8080))">Open Explorer</button>
         </div>
         <div class="card">
             <h3>Captioning (VLM Captioner)</h3>
-            <button class="btn btn-launch" onclick="window.open('/vlm/')">Open Tool</button>
+            <button class="btn btn-launch" onclick="window.open(getToolUrl(5002))">Open Tool</button>
         </div>
         <div class="card">
             <h3>Training (Ostris AI Toolkit)</h3>
-            <button class="btn btn-launch" onclick="window.open('/trainer/')">Launch Trainer</button>
+            <button class="btn btn-launch" onclick="window.open(getToolUrl(8675))">Launch Trainer</button>
         </div>
     </div>
 
@@ -91,6 +91,17 @@
     <div id="models" class="grid"></div>
 
     <script>
+        // Build the correct URL for a tool running on a given internal container port.
+        // RunPod proxies ports via subdomains: {pod-id}-{port}.proxy.runpod.net
+        // Local Docker (docker-compose): falls back to hostname:port
+        function getToolUrl(port) {
+            const runpod = location.hostname.match(/^(.+)-(\d+)(\.proxy\.runpod\.net)$/);
+            if (runpod) {
+                return `${location.protocol}//${runpod[1]}-${port}${runpod[3]}`;
+            }
+            return `${location.protocol}//${location.hostname}:${port}`;
+        }
+
         let running = false;
         async function update() {
             try {
