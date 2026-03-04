@@ -19,23 +19,28 @@ def get_registry():
         return json.load(f)
 
 
-def _stream_output(proc, log_path, model_id):
-    """Read subprocess output line-by-line, write to log file AND stdout (docker logs)."""
+def _stream_output(proc, log_path, model_id, final=True):
+    """Read subprocess output line-by-line, write to log file AND stdout (docker logs).
+
+    If final=False, the __STATUS__ sentinel is suppressed so the SSE stream
+    stays open for a subsequent download (e.g. mmproj sidecar).
+    """
     prefix = f"[download:{model_id}]"
-    with open(log_path, 'w', buffering=1) as lf:
+    with open(log_path, 'a', buffering=1) as lf:
         for line in iter(proc.stdout.readline, ''):
             msg = f"{prefix} {line.rstrip()}"
             print(msg, flush=True)
             lf.write(line)
         proc.wait()
-    with _lock:
-        if model_id in _downloads:
-            _downloads[model_id]["done"] = True
     rc = proc.returncode
     status = "complete" if rc == 0 else f"failed (exit {rc})"
     print(f"{prefix} Download {status}.", flush=True)
-    with open(log_path, 'a') as lf:
-        lf.write(f"\n__STATUS__{status}\n")
+    if final:
+        with _lock:
+            if model_id in _downloads:
+                _downloads[model_id]["done"] = True
+        with open(log_path, 'a') as lf:
+            lf.write(f"\n__STATUS__{status}\n")
 
 
 # ── Auto-stop state ──────────────────────────────────────────────────────────
@@ -191,31 +196,59 @@ def dl(id):
         if id in _downloads and not _downloads[id].get("done", False):
             return jsonify({"status": "already_downloading"})
 
-    repo = entry['repo']
-    path = os.path.dirname(entry['path'])
-    os.makedirs(path, exist_ok=True)
+    repo     = entry['repo']
+    filename = entry.get('file')
+    mmproj   = entry.get('mmproj')   # optional vision projector sidecar
+    dest_dir = os.path.dirname(entry['path'])
+    os.makedirs(dest_dir, exist_ok=True)
 
     log_path = os.path.join(LOG_DIR, f"{id}.log")
     open(log_path, 'w').close()
 
-    print(f"[download:{id}] Starting download of '{repo}' into {path}", flush=True)
+    def build_cmd(file=None):
+        base = ["huggingface-cli", "download", repo]
+        if file:
+            base.append(file)
+        return base + ["--local-dir", dest_dir, "--local-dir-use-symlinks=False"]
 
-    proc = subprocess.Popen(
-        ["huggingface-cli", "download", repo,
-         "--local-dir", path,
-         "--local-dir-use-symlinks=False"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-    )
+    def run_downloads():
+        """Download main file, then mmproj sidecar (if any), sequentially."""
+        # ── Main file ──────────────────────────────────────────────────────
+        label = f"'{filename}'" if filename else f"repo '{repo}'"
+        print(f"[download:{id}] Downloading {label} into {dest_dir}", flush=True)
+
+        proc = subprocess.Popen(
+            build_cmd(filename),
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, bufsize=1,
+        )
+        with _lock:
+            _downloads[id]["proc"] = proc
+
+        _stream_output(proc, log_path, id, final=not mmproj)
+
+        if proc.returncode != 0 or not mmproj:
+            return
+
+        # ── mmproj sidecar ─────────────────────────────────────────────────
+        print(f"[download:{id}] Downloading mmproj '{mmproj}' into {dest_dir}", flush=True)
+        with open(log_path, 'a') as lf:
+            lf.write(f"\n[Fetching vision projector: {mmproj}]\n")
+
+        proc2 = subprocess.Popen(
+            build_cmd(mmproj),
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, bufsize=1,
+        )
+        with _lock:
+            _downloads[id]["proc"] = proc2
+
+        _stream_output(proc2, log_path, id, final=True)
 
     with _lock:
-        _downloads[id] = {"proc": proc, "log": log_path, "done": False}
+        _downloads[id] = {"proc": None, "log": log_path, "done": False}
 
-    t = threading.Thread(target=_stream_output, args=(proc, log_path, id), daemon=True)
-    t.start()
-
+    threading.Thread(target=run_downloads, daemon=True).start()
     return jsonify({"status": "started"})
 
 

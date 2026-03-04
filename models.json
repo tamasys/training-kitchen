@@ -2,13 +2,16 @@
   "joycaption": {
     "name": "JoyCaption Beta One",
     "repo": "mradermacher/llama-joycaption-beta-one-hf-llava-GGUF",
+    "file": "llama-joycaption-beta-one-hf-llava.Q4_K_M.gguf",
     "path": "/workspace/models/joycaption/joycaption.gguf",
-    "desc": "High-detail captions for Flux training datasets."
+    "desc": "High-detail natural-language captions, purpose-built for Flux training datasets."
   },
-  "florence2": {
-    "name": "Florence-2 Large",
-    "repo": "mradermacher/Florence-2-large-GGUF",
-    "path": "/workspace/models/florence2/florence2.gguf",
-    "desc": "Fast vision, OCR, and object detection."
+  "qwen25vl": {
+    "name": "Qwen2.5-VL 7B",
+    "repo": "bartowski/Qwen_Qwen2.5-VL-7B-Instruct-GGUF",
+    "file": "Qwen_Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf",
+    "mmproj": "mmproj-Qwen_Qwen2.5-VL-7B-Instruct-f16.gguf",
+    "path": "/workspace/models/qwen25vl/qwen25vl.gguf",
+    "desc": "Strong general vision model. Good for structured descriptions, OCR, and scene analysis. (~4.5 GB + 1.3 GB projector)"
   }
 }
