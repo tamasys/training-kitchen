@@ -396,7 +396,7 @@
         <div class="card">
             <h3>Training (Ostris AI Toolkit)</h3>
             <p class="status">LoRA and full fine-tune training interface.</p>
-            <button class="btn btn-launch" onclick="window.open(getToolUrl(8675))">Launch Trainer</button>
+            <button class="btn btn-launch" onclick="window.open(getToolUrl(8676))">Launch Trainer</button>
         </div>
     </div>
 
@@ -643,6 +643,9 @@
         setInterval(update, 5000);
         update();
     </script>
+
+    <!-- Auto-stop warning overlay (RunPod only — no-ops silently elsewhere) -->
+    <script src="/autostop-guard.js"></script>
 </body>
 
 </html>

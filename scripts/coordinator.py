@@ -276,6 +276,17 @@ def autostop_get():
     })
 
 
+@app.route('/api/autostop/ping', methods=['POST'])
+def autostop_ping():
+    """Reset the inactivity timer without changing any other settings.
+    Called by the guard overlay when the user clicks 'I'm Still Here'."""
+    with _autostop_lock:
+        if _autostop["enabled"] and not _autostop["stopping"]:
+            _autostop["last_active_at"] = None
+            print("[autostop] Timer reset by user ping.", flush=True)
+    return jsonify({"status": "ok"})
+
+
 @app.route('/api/autostop', methods=['POST'])
 def autostop_set():
     body = request.get_json(silent=True) or {}

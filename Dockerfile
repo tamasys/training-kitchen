@@ -42,6 +42,6 @@ RUN chmod +x start.sh scripts/updater.sh
 RUN rm -f /etc/nginx/sites-enabled/default && \
     ln -s /app/nginx.conf /etc/nginx/sites-enabled/training-kitchen
 
-# Ports: 80 (Dashboard), 5005 (Coordinator API), 8080 (Files), 5001 (LLM API), 5002 (VLM UI), 8675 (AI Toolkit UI)
-EXPOSE 80 5005 8080 5001 5002 8675
+# Ports: 80 (Dashboard), 5005 (Coordinator API), 8080 (Files), 5001 (LLM API), 5002 (VLM UI), 8676 (AI Toolkit UI via nginx)
+EXPOSE 80 5005 8080 5001 5002 8676
 ENTRYPOINT ["/app/start.sh"]
