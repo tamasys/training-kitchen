@@ -3,69 +3,380 @@
 
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Training Kitchen</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: 'Segoe UI', sans-serif;
-            background: #262322;
-            color: white;
+            font-family: 'Inter', 'Segoe UI', sans-serif;
+            background: #1a1918;
+            color: #e2d9d0;
             padding: 2rem;
             max-width: 1200px;
             margin: auto;
         }
 
+        h1 {
+            margin-bottom: 0.25rem;
+        }
+
+        h2 {
+            margin-top: 3rem;
+            margin-bottom: 1rem;
+            color: #c6b89e;
+        }
+
         .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
             gap: 1.5rem;
         }
 
         .card {
-            background: #2d3136;
+            background: #262322;
             padding: 1.5rem;
             border-radius: 12px;
-            border: 1px solid #334155;
+            border: 1px solid #3a3330;
             position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .card h3,
+        .card h4 {
+            margin: 0;
         }
 
         .btn {
             width: 100%;
-            padding: 0.8rem;
+            padding: 0.75rem;
             border-radius: 8px;
             border: none;
-            font-weight: bold;
+            font-weight: 600;
+            font-size: 0.9rem;
             cursor: pointer;
-            margin-top: 10px;
-            transition: 0.2s;
+            margin-top: 4px;
+            transition: opacity 0.2s, transform 0.1s;
+            font-family: inherit;
+        }
+
+        .btn:hover:not(:disabled) {
+            opacity: 0.85;
+            transform: translateY(-1px);
+        }
+
+        .btn:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            cursor: default;
+            opacity: 0.7;
         }
 
         .btn-vram {
             background: #c6b89e;
-            color: #000;
+            color: #1a1918;
         }
 
         .btn-launch {
-            background: #a4e0ad;
-            color: #000;
+            background: #4ade80;
+            color: #1a1918;
         }
 
         .btn-dl {
             background: #a0756a;
-            color: white;
+            color: #fff;
+        }
+
+        .btn-installed {
+            background: #2d4a35;
+            color: #4ade80;
         }
 
         .status {
+            font-size: 0.82rem;
+            color: #8a8075;
+            margin: 0;
+        }
+
+        /* ── Auto-stop card ── */
+        #autostop-card {
+            border-color: #7c5cbf44;
+            display: none;
+        }
+
+        #autostop-card.visible {
+            display: flex;
+        }
+
+        .autostop-row {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        /* Toggle switch */
+        .toggle-wrap {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .toggle {
+            position: relative;
+            display: inline-block;
+            width: 42px;
+            height: 24px;
+            flex-shrink: 0;
+        }
+
+        .toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            inset: 0;
+            background: #3a3330;
+            border-radius: 24px;
+            cursor: pointer;
+            transition: background 0.25s;
+        }
+
+        .toggle-slider::before {
+            content: '';
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            left: 3px;
+            bottom: 3px;
+            background: #8a8075;
+            border-radius: 50%;
+            transition: transform 0.25s, background 0.25s;
+        }
+
+        .toggle input:checked+.toggle-slider {
+            background: #7c5cbf;
+        }
+
+        .toggle input:checked+.toggle-slider::before {
+            transform: translateX(18px);
+            background: #fff;
+        }
+
+        .toggle-label {
             font-size: 0.85rem;
-            color: #94a3b8;
-            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        .autostop-select {
+            background: #1a1918;
+            border: 1px solid #3a3330;
+            border-radius: 7px;
+            color: #e2d9d0;
+            padding: 0.3rem 0.55rem;
+            font-size: 0.82rem;
+            font-family: inherit;
+            cursor: pointer;
+        }
+
+        .idle-indicators {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.4rem;
+            flex-wrap: wrap;
+        }
+
+        .idle-chip {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            border: 1px solid #3a3330;
+            background: #1a1918;
+            color: #8a8075;
+            transition: all 0.3s;
+        }
+
+        .idle-chip .idot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #8a8075;
+            transition: background 0.3s;
+        }
+
+        .idle-chip.idle-yes {
+            border-color: #4ade8066;
+            color: #4ade80;
+            background: #4ade8011;
+        }
+
+        .idle-chip.idle-yes .idot {
+            background: #4ade80;
+        }
+
+        .idle-chip.idle-no {
+            border-color: #fbbf2466;
+            color: #fbbf24;
+            background: #fbbf2411;
+        }
+
+        .idle-chip.idle-no .idot {
+            background: #fbbf24;
+        }
+
+        .autostop-countdown {
+            font-size: 0.78rem;
+            color: #8a8075;
+            margin-top: 0.35rem;
+            min-height: 1.2em;
+        }
+
+        .autostop-countdown.warn {
+            color: #f87171;
+        }
+
+        .autostop-stopping {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: #f87171;
+            margin-top: 0.4rem;
+            animation: flash 1s infinite;
+        }
+
+        @keyframes flash {
+
+            0%,
+            100% {
+                opacity: 1
+            }
+
+            50% {
+                opacity: 0.4
+            }
+        }
+
+        /* ── Progress UI ── */
+        .progress-wrap {
+            display: none;
+            flex-direction: column;
+            gap: 0.4rem;
+            margin-top: 6px;
+        }
+
+        .progress-wrap.active {
+            display: flex;
+        }
+
+        .progress-label {
+            font-size: 0.78rem;
+            color: #c6b89e;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .progress-bar-bg {
+            background: #3a3330;
+            border-radius: 6px;
+            height: 8px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            border-radius: 6px;
+            background: linear-gradient(90deg, #a0756a, #c6b89e);
+            width: 0%;
+            transition: width 0.4s ease;
+            /* indeterminate pulse when width stays at 0 */
+        }
+
+        .progress-bar-fill.indeterminate {
+            width: 100% !important;
+            background: linear-gradient(90deg, #3a3330 0%, #a0756a 50%, #3a3330 100%);
+            background-size: 200% 100%;
+            animation: shimmer 1.6s infinite linear;
+        }
+
+        @keyframes shimmer {
+            0% {
+                background-position: 200% 0;
+            }
+
+            100% {
+                background-position: -200% 0;
+            }
+        }
+
+        .progress-log {
+            background: #111110;
+            border: 1px solid #2d2a28;
+            border-radius: 6px;
+            padding: 0.5rem 0.6rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.72rem;
+            color: #a09080;
+            max-height: 110px;
+            overflow-y: auto;
+            line-height: 1.5;
+            word-break: break-all;
         }
     </style>
 </head>
 
 <body>
-    <h1>Training Kitchen <span style="font-size: 0.9rem; opacity: 0.5;">v2026.2</span></h1>
+    <h1>Training Kitchen <span style="font-size: 0.9rem; opacity: 0.4;">v2026.2</span></h1>
 
-    <div class="card" style="margin-bottom: 2rem; border-color: #c6b89e;">
+    <!-- Auto-stop card (RunPod only – shown via JS) -->
+    <div class="card" id="autostop-card" style="margin-bottom: 1.5rem; flex-direction: column; gap: 0.6rem;">
+        <h3 style="margin:0;">🛑 Auto-Stop Pod</h3>
+        <div class="autostop-row">
+            <label class="toggle-wrap" title="Stop this pod after a period of inactivity">
+                <span class="toggle">
+                    <input type="checkbox" id="autostop-toggle" onchange="setAutostop()">
+                    <span class="toggle-slider"></span>
+                </span>
+                <span class="toggle-label">Stop pod when idle for</span>
+            </label>
+            <select class="autostop-select" id="autostop-minutes" onchange="setAutostop()">
+                <option value="5">5 min</option>
+                <option value="10">10 min</option>
+                <option value="15" selected>15 min</option>
+                <option value="30">30 min</option>
+                <option value="45">45 min</option>
+                <option value="60">60 min</option>
+            </select>
+        </div>
+        <div class="idle-indicators">
+            <div class="idle-chip" id="chip-vlm">
+                <div class="idot"></div><span>VLM</span>
+            </div>
+            <div class="idle-chip" id="chip-trainer">
+                <div class="idot"></div><span>Trainer</span>
+            </div>
+        </div>
+        <div class="autostop-countdown" id="autostop-countdown"></div>
+        <div class="autostop-stopping" id="autostop-stopping" style="display:none">⚡ Stop command sent — pod shutting
+            down…</div>
+    </div>
+
+    <div class="card" style="margin-bottom: 2rem; border-color: #c6b89e44;">
         <h3 style="margin-top:0;">VRAM Management</h3>
         <p id="vram-info" class="status">Checking engine...</p>
         <button id="vram-btn" class="btn btn-vram" onclick="toggleEngine()">Wait...</button>
@@ -73,56 +384,264 @@
 
     <div class="grid">
         <div class="card">
-            <h3>Files (File Manager Quantum)</h3>
-            <p class="status">Manage your datasets in /workspace.</p>
+            <h3>Files</h3>
+            <p class="status">Manage your datasets in /workspace via File Browser Quantum.</p>
             <button class="btn btn-launch" onclick="window.open(getToolUrl(8080))">Open Explorer</button>
         </div>
         <div class="card">
             <h3>Captioning (VLM Captioner)</h3>
+            <p class="status">AI-powered batch captioning for training datasets.</p>
             <button class="btn btn-launch" onclick="window.open(getToolUrl(5002))">Open Tool</button>
         </div>
         <div class="card">
             <h3>Training (Ostris AI Toolkit)</h3>
+            <p class="status">LoRA and full fine-tune training interface.</p>
             <button class="btn btn-launch" onclick="window.open(getToolUrl(8675))">Launch Trainer</button>
         </div>
     </div>
 
-    <h2 style="margin-top:3rem;">Vision Models</h2>
+    <h2>Vision Models</h2>
     <div id="models" class="grid"></div>
 
     <script>
-        // Build the correct URL for a tool running on a given internal container port.
-        // RunPod proxies ports via subdomains: {pod-id}-{port}.proxy.runpod.net
-        // Local Docker (docker-compose): falls back to hostname:port
+        // ── RunPod detection ─────────────────────────────────────────────────
+        const IS_RUNPOD = /\.proxy\.runpod\.net$/.test(location.hostname);
+        if (IS_RUNPOD) document.getElementById('autostop-card').classList.add('visible');
+
+        // ── Auto-stop ────────────────────────────────────────────────────────
+        async function pollAutostop() {
+            if (!IS_RUNPOD) return;
+            try {
+                const res = await fetch('/api/autostop');
+                const data = await res.json();
+
+                // Sync toggle + select to server state (in case of page reload)
+                document.getElementById('autostop-toggle').checked = data.enabled;
+                document.getElementById('autostop-minutes').value = String(data.minutes);
+
+                // Idle chips
+                setChip('chip-vlm', data.vlm_idle);
+                setChip('chip-trainer', data.trainer_idle);
+
+                // Countdown
+                const cd = document.getElementById('autostop-countdown');
+                const stp = document.getElementById('autostop-stopping');
+
+                if (data.stopping) {
+                    cd.textContent = '';
+                    stp.style.display = '';
+                } else if (data.enabled && data.timer_running && data.seconds_remaining != null) {
+                    stp.style.display = 'none';
+                    const mins = Math.floor(data.seconds_remaining / 60);
+                    const secs = Math.floor(data.seconds_remaining % 60);
+                    cd.textContent = `⏱ Stopping in ${mins}m ${secs.toString().padStart(2, '0')}s`;
+                    cd.className = 'autostop-countdown' + (data.seconds_remaining < 120 ? ' warn' : '');
+                } else if (data.enabled) {
+                    stp.style.display = 'none';
+                    const bothIdle = data.vlm_idle && data.trainer_idle;
+                    cd.textContent = bothIdle
+                        ? '⏱ Inactivity timer starting…'
+                        : '✔ Active — timer paused';
+                    cd.className = 'autostop-countdown';
+                } else {
+                    stp.style.display = 'none';
+                    cd.textContent = '';
+                    cd.className = 'autostop-countdown';
+                }
+            } catch (e) { /* coordinator not ready */ }
+        }
+
+        function setChip(id, isIdle) {
+            const el = document.getElementById(id);
+            el.classList.toggle('idle-yes', isIdle);
+            el.classList.toggle('idle-no', !isIdle);
+            el.querySelector('span').textContent =
+                id === 'chip-vlm'
+                    ? `VLM ${isIdle ? '— Idle' : '— Busy'}`
+                    : `Trainer ${isIdle ? '— Idle' : '— Busy'}`;
+        }
+
+        async function setAutostop() {
+            const enabled = document.getElementById('autostop-toggle').checked;
+            const minutes = parseInt(document.getElementById('autostop-minutes').value, 10);
+            await fetch('/api/autostop', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled, minutes }),
+            });
+            await pollAutostop();
+        }
+
+        setInterval(pollAutostop, 15000);
+        pollAutostop();
+
+        // ── Helpers ─────────────────────────────────────────────────────────
         function getToolUrl(port) {
-            const runpod = location.hostname.match(/^(.+)-(\d+)(\.proxy\.runpod\.net)$/);
-            if (runpod) {
-                return `${location.protocol}//${runpod[1]}-${port}${runpod[3]}`;
-            }
+            const rp = location.hostname.match(/^(.+)-(\d+)(\.proxy\.runpod\.net)$/);
+            if (rp) return `${location.protocol}//${rp[1]}-${port}${rp[3]}`;
             return `${location.protocol}//${location.hostname}:${port}`;
         }
 
+        // Tracks SSE connections per model id so we don't open duplicates
+        const activeStreams = {};
+
+        // ── SSE Progress ─────────────────────────────────────────────────────
+        function startProgressStream(id) {
+            if (activeStreams[id]) return;          // already streaming
+
+            const card = document.getElementById(`card-${id}`);
+            if (!card) return;
+
+            const wrap = card.querySelector('.progress-wrap');
+            const fill = card.querySelector('.progress-bar-fill');
+            const log = card.querySelector('.progress-log');
+            const label = card.querySelector('.progress-label span:last-child');
+            const btn = card.querySelector('.btn-dl');
+
+            wrap.classList.add('active');
+            fill.classList.add('indeterminate');
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ Downloading…'; }
+
+            let lastPct = null;
+
+            const es = new EventSource(`/api/download/progress/${id}`);
+            activeStreams[id] = es;
+
+            es.onmessage = (e) => {
+                const msg = e.data;
+
+                if (msg === '__DONE__') {
+                    es.close();
+                    delete activeStreams[id];
+                    fill.classList.remove('indeterminate');
+                    fill.style.width = '100%';
+                    if (label) label.textContent = '100%';
+                    setTimeout(update, 1200);   // refresh card to show ✅ Installed
+                    return;
+                }
+
+                if (msg.startsWith('__STATUS__')) {
+                    const status = msg.replace('__STATUS__', '').trim();
+                    appendLog(log, `► ${status}`);
+                    return;
+                }
+
+                appendLog(log, msg);
+
+                // Try to parse a percentage from hf-cli output lines like:
+                // "Downloading model.safetensors:  42%|████▏     | 1.23G/2.94G"
+                const pctMatch = msg.match(/(\d+)%/);
+                if (pctMatch) {
+                    const pct = parseInt(pctMatch[1], 10);
+                    if (pct !== lastPct) {
+                        lastPct = pct;
+                        fill.classList.remove('indeterminate');
+                        fill.style.width = pct + '%';
+                        if (label) label.textContent = pct + '%';
+                    }
+                }
+            };
+
+            es.onerror = () => {
+                es.close();
+                delete activeStreams[id];
+                appendLog(log, '⚠ Connection lost – check container logs.');
+            };
+        }
+
+        function appendLog(el, text) {
+            if (!text.trim()) return;
+            el.textContent += text + '\n';
+            el.scrollTop = el.scrollHeight;
+        }
+
+        // ── Download trigger ─────────────────────────────────────────────────
+        async function dl(id) {
+            const res = await fetch(`/api/download/${id}`);
+            const data = await res.json();
+            if (data.status === 'already_installed') {
+                alert('Already installed!');
+                return;
+            }
+            startProgressStream(id);
+        }
+
+        // ── Main update loop ─────────────────────────────────────────────────
         let running = false;
+
         async function update() {
             try {
                 const res = await fetch('/api/status');
                 const data = await res.json();
                 running = data.engine;
-                document.getElementById('vram-info').innerText = running ? "ENGINE ACTIVE (Consuming VRAM)" : "ENGINE STOPPED (VRAM Clear for Training)";
-                document.getElementById('vram-btn').innerText = running ? "STOP ENGINE" : "START ENGINE";
-                document.getElementById('vram-btn').style.background = running ? "#ef4444" : "#22c55e";
+
+                document.getElementById('vram-info').textContent =
+                    running ? '🔴 ENGINE ACTIVE — consuming VRAM'
+                        : '🟢 ENGINE STOPPED — VRAM clear for training';
+                const vBtn = document.getElementById('vram-btn');
+                vBtn.textContent = running ? 'STOP ENGINE' : 'START ENGINE';
+                vBtn.style.background = running ? '#ef4444' : '#22c55e';
 
                 const div = document.getElementById('models');
-                div.innerHTML = '';
+
                 Object.entries(data.models).forEach(([id, m]) => {
-                    div.innerHTML += `<div class="card"><h4>${m.name}</h4><p class="status">${m.desc}</p>
-                    <button class="btn btn-dl" ${m.installed ? 'disabled' : `onclick="dl('${id}')"`}>${m.installed ? '✅ Installed' : '⬇️ Download'}</button></div>`;
+                    let card = document.getElementById(`card-${id}`);
+
+                    // Build card the first time
+                    if (!card) {
+                        card = document.createElement('div');
+                        card.className = 'card';
+                        card.id = `card-${id}`;
+                        card.innerHTML = `
+                            <h4>${m.name}</h4>
+                            <p class="status">${m.desc}</p>
+                            <div class="progress-wrap">
+                                <div class="progress-label">
+                                    <span>Downloading…</span>
+                                    <span></span>
+                                </div>
+                                <div class="progress-bar-bg">
+                                    <div class="progress-bar-fill indeterminate"></div>
+                                </div>
+                                <div class="progress-log"></div>
+                            </div>
+                            <button class="btn btn-dl" id="btn-${id}">⬇️ Download</button>
+                        `;
+                        card.querySelector('.btn-dl').addEventListener('click', () => dl(id));
+                        div.appendChild(card);
+                    }
+
+                    const btn = card.querySelector('.btn-dl');
+
+                    if (m.installed) {
+                        btn.disabled = true;
+                        btn.textContent = '✅ Installed';
+                        btn.className = 'btn btn-installed';
+                        card.querySelector('.progress-wrap').classList.remove('active');
+                    } else if (m.downloading) {
+                        // Server says a download is in progress – attach SSE if not already
+                        startProgressStream(id);
+                    } else {
+                        // Not installed, not downloading
+                        if (!activeStreams[id]) {
+                            btn.disabled = false;
+                            btn.textContent = '⬇️ Download';
+                            btn.className = 'btn btn-dl';
+                        }
+                    }
                 });
-            } catch (e) { console.error("Waiting for backend..."); }
+            } catch (e) {
+                console.warn('Waiting for backend…');
+            }
         }
-        function dl(id) { fetch(`/api/download/${id}`); alert("Download started!"); }
-        function toggleEngine() { fetch(`/api/engine/${running ? 'stop' : 'start'}`); setTimeout(update, 1000); }
-        setInterval(update, 5000); update();
+
+        function toggleEngine() {
+            fetch(`/api/engine/${running ? 'stop' : 'start'}`);
+            setTimeout(update, 1000);
+        }
+
+        setInterval(update, 5000);
+        update();
     </script>
 </body>
 
