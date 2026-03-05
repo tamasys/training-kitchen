@@ -568,19 +568,48 @@
 
         // ── Main update loop ─────────────────────────────────────────────────
         let running = false;
+        let engineStatus = 'STOPPED';  // STOPPED | STARTING | RUNNING | ERROR
+        let _fastPoll = null;       // interval handle for post-toggle fast-poll
 
         async function update() {
             try {
                 const res = await fetch('/api/status');
                 const data = await res.json();
+                engineStatus = data.engine_status || (data.engine ? 'RUNNING' : 'STOPPED');
                 running = data.engine;
 
-                document.getElementById('vram-info').textContent =
-                    running ? '🔴 ENGINE ACTIVE — consuming VRAM'
-                        : '🟢 ENGINE STOPPED — VRAM clear for training';
+                const info = document.getElementById('vram-info');
                 const vBtn = document.getElementById('vram-btn');
-                vBtn.textContent = running ? 'STOP ENGINE' : 'START ENGINE';
-                vBtn.style.background = running ? '#ef4444' : '#22c55e';
+
+                if (engineStatus === 'RUNNING') {
+                    info.textContent = '🔴 ENGINE ACTIVE — consuming VRAM';
+                    info.style.color = '';
+                    vBtn.textContent = 'STOP ENGINE';
+                    vBtn.style.background = '#ef4444';
+                    vBtn.disabled = false;
+                    stopFastPoll();
+                } else if (engineStatus === 'STARTING') {
+                    info.textContent = '⏳ Engine starting — loading model…';
+                    info.style.color = '#fbbf24';
+                    vBtn.textContent = '⏳ Starting…';
+                    vBtn.style.background = '#78350f';
+                    vBtn.disabled = true;
+                } else if (engineStatus === 'ERROR') {
+                    const detail = data.engine_output || '';
+                    info.textContent = '❌ Engine failed to start' + (detail ? ': ' + detail : '');
+                    info.style.color = '#f87171';
+                    vBtn.textContent = 'RETRY START';
+                    vBtn.style.background = '#22c55e';
+                    vBtn.disabled = false;
+                    stopFastPoll();
+                } else {
+                    info.textContent = '🟢 ENGINE STOPPED — VRAM clear for training';
+                    info.style.color = '';
+                    vBtn.textContent = 'START ENGINE';
+                    vBtn.style.background = '#22c55e';
+                    vBtn.disabled = false;
+                    stopFastPoll();
+                }
 
                 const div = document.getElementById('models');
 
@@ -635,9 +664,40 @@
             }
         }
 
-        function toggleEngine() {
-            fetch(`/api/engine/${running ? 'stop' : 'start'}`);
-            setTimeout(update, 1000);
+        function startFastPoll() {
+            stopFastPoll();
+            let ticks = 0;
+            _fastPoll = setInterval(async () => {
+                await update();
+                ticks++;
+                if (engineStatus === 'RUNNING' || engineStatus === 'ERROR' ||
+                    engineStatus === 'STOPPED' && ticks > 2 || ticks > 90) {
+                    stopFastPoll();
+                }
+            }, 2000);
+        }
+
+        function stopFastPoll() {
+            if (_fastPoll) { clearInterval(_fastPoll); _fastPoll = null; }
+        }
+
+        async function toggleEngine() {
+            const action = running ? 'stop' : 'start';
+            const vBtn = document.getElementById('vram-btn');
+            const info = document.getElementById('vram-info');
+
+            // Immediately reflect transitional state before request returns
+            vBtn.disabled = true;
+            vBtn.textContent = action === 'start' ? '⏳ Starting…' : '⏳ Stopping…';
+            info.textContent = action === 'start' ? '⏳ Engine starting — loading model…' : '⏳ Stopping engine…';
+            info.style.color = '#fbbf24';
+
+            const res = await fetch(`/api/engine/${action}`);
+            const data = await res.json();
+            if (data.detail) console.log(`[engine ${action}]`, data.detail);
+
+            // Poll every 2 s — llama.cpp can take 5–30 s to load a model
+            startFastPoll();
         }
 
         setInterval(update, 5000);

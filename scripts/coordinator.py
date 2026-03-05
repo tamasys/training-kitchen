@@ -154,7 +154,7 @@ threading.Thread(target=_autostop_watcher, daemon=True).start()
 @app.route('/api/status')
 def status():
     reg = get_registry()
-    data = {"models": {}, "engine": False}
+    data = {"models": {}, "engine": False, "engine_status": "STOPPED"}
     for k, v in reg.items():
         installed = os.path.exists(v['path'])
         with _lock:
@@ -169,7 +169,13 @@ def status():
 
     res = subprocess.run(['supervisorctl', 'status', 'llama_router'],
                          capture_output=True, text=True)
-    data["engine"] = "RUNNING" in res.stdout
+    out = res.stdout.strip()
+    if   "RUNNING"  in out: data["engine_status"] = "RUNNING"
+    elif "STARTING" in out: data["engine_status"] = "STARTING"
+    elif "FATAL"    in out or "ERROR" in out: data["engine_status"] = "ERROR"
+    else:                   data["engine_status"] = "STOPPED"
+    data["engine"] = data["engine_status"] == "RUNNING"
+    data["engine_output"] = out   # raw line for debugging
     return jsonify(data)
 
 
@@ -177,8 +183,14 @@ def status():
 def engine_ctl(action):
     if action not in ('start', 'stop'):
         return jsonify({"error": "invalid action"}), 400
-    subprocess.run(['supervisorctl', action, 'llama_router'])
-    return jsonify({"status": "ok"})
+    res = subprocess.run(
+        ['supervisorctl', action, 'llama_router'],
+        capture_output=True, text=True
+    )
+    # Return the supervisorctl output so the UI can surface errors
+    out = (res.stdout + res.stderr).strip()
+    print(f"[engine] supervisorctl {action}: {out}", flush=True)
+    return jsonify({"status": "ok", "detail": out})
 
 
 @app.route('/api/download/<id>')
