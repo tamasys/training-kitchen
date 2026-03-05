@@ -694,10 +694,20 @@
 
             const res = await fetch(`/api/engine/${action}`);
             const data = await res.json();
-            if (data.detail) console.log(`[engine ${action}]`, data.detail);
 
-            // Poll every 2 s — llama.cpp can take 5–30 s to load a model
-            startFastPoll();
+            if (data.status === 'error') {
+                // supervisorctl itself failed — show the error immediately on the page
+                info.textContent = '\u274c ' + (data.detail || 'supervisorctl error');
+                info.style.color = '#f87171';
+                vBtn.textContent = 'RETRY START';
+                vBtn.style.background = '#22c55e';
+                vBtn.disabled = false;
+                console.error(`[engine ${action}]`, data.detail);
+            } else {
+                if (data.detail) console.log(`[engine ${action}]`, data.detail);
+                // Poll every 2 s — llama.cpp can take 5–30 s to load a model
+                startFastPoll();
+            }
         }
 
         setInterval(update, 5000);

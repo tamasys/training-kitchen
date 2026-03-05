@@ -170,10 +170,11 @@ def status():
     res = subprocess.run(['supervisorctl', 'status', 'llama_router'],
                          capture_output=True, text=True)
     out = res.stdout.strip()
-    if   "RUNNING"  in out: data["engine_status"] = "RUNNING"
-    elif "STARTING" in out: data["engine_status"] = "STARTING"
-    elif "FATAL"    in out or "ERROR" in out: data["engine_status"] = "ERROR"
-    else:                   data["engine_status"] = "STOPPED"
+    out_lower = out.lower()
+    if   "running"  in out_lower: data["engine_status"] = "RUNNING"
+    elif "starting" in out_lower: data["engine_status"] = "STARTING"
+    elif "fatal"    in out_lower or "error" in out_lower: data["engine_status"] = "ERROR"
+    else:                         data["engine_status"] = "STOPPED"
     data["engine"] = data["engine_status"] == "RUNNING"
     data["engine_output"] = out   # raw line for debugging
     return jsonify(data)
@@ -189,7 +190,9 @@ def engine_ctl(action):
     )
     # Return the supervisorctl output so the UI can surface errors
     out = (res.stdout + res.stderr).strip()
-    print(f"[engine] supervisorctl {action}: {out}", flush=True)
+    print(f"[engine] supervisorctl {action} (rc={res.returncode}): {out}", flush=True)
+    if res.returncode != 0:
+        return jsonify({"status": "error", "detail": out})
     return jsonify({"status": "ok", "detail": out})
 
 
