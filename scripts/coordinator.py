@@ -5,6 +5,12 @@ import subprocess, os, json, sys, threading, time, urllib.request
 app = Flask(__name__)
 CORS(app)
 
+# ── Storage path ─────────────────────────────────────────────────────────────
+# Defaults to /workspace (RunPod Network Volume standard).
+# Override with STORAGE_DIR env var for non-standard mount points (/mnt, etc.)
+STORAGE_DIR = os.environ.get('STORAGE_DIR', '/workspace').rstrip('/')
+print(f"[coordinator] Storage directory: {STORAGE_DIR}", flush=True)
+
 # ── Download tracking ────────────────────────────────────────────────────────
 # id -> {"proc": Popen, "log": path, "done": bool}
 _downloads = {}
@@ -15,8 +21,14 @@ os.makedirs(LOG_DIR, exist_ok=True)
 
 
 def get_registry():
+    """Load models.json and expand {storage} placeholder with STORAGE_DIR."""
     with open('/app/models.json', 'r') as f:
-        return json.load(f)
+        raw = json.load(f)
+    for entry in raw.values():
+        for key in ('path',):
+            if key in entry:
+                entry[key] = entry[key].replace('{storage}', STORAGE_DIR)
+    return raw
 
 
 def _stream_output(proc, log_path, model_id, final=True):

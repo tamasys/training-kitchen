@@ -11,6 +11,9 @@ services:
       - "5002:5002" # VLM Captioner (direct)
       - "5005:5005" # Coordinator API (direct)
       - "8676:8676" # AI Toolkit UI via nginx proxy (direct to 8675 bypasses the guard script)
+    environment:
+      # Override for non-standard RunPod storage mounts (e.g. /mnt/workspace, /runpod-volume)
+      - STORAGE_DIR=${STORAGE_DIR:-/workspace}
     volumes:
       - workspace:/workspace
     deploy:
