@@ -3,6 +3,11 @@ FROM nvidia/cuda:12.2.2-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Make libcuda.so.1 (injected by the Docker GPU runtime) visible to the dynamic linker.
+# /usr/local/nvidia/lib64 is where nvidia-container-toolkit bind-mounts the driver libs.
+# /usr/local/cuda/lib64 covers any CUDA runtime libs baked into the base image.
+ENV LD_LIBRARY_PATH=/usr/local/nvidia/lib64:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
+
 # Runtime dependencies + Node.js 18 (required for ai-toolkit UI)
 RUN apt-get update && apt-get install -y \
     python3-pip git curl nginx supervisor \
