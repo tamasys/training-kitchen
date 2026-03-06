@@ -4,7 +4,7 @@
     "repo": "mradermacher/llama-joycaption-beta-one-hf-llava-GGUF",
     "file": "llama-joycaption-beta-one-hf-llava.Q4_K_M.gguf",
     "path": "{storage}/models/joycaption/joycaption.gguf",
-    "desc": "High-detail natural-language captions, purpose-built for Flux training datasets. (~4.9 GB)"
+    "desc": "Purpose-built model for generating highly detailed natural-language image captions. (~4.9 GB)"
   },
   "qwen25vl": {
     "name": "Qwen2.5-VL 7B",
