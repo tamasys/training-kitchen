@@ -43,6 +43,10 @@ WORKDIR /app
 COPY . .
 RUN chmod +x start.sh scripts/updater.sh
 
+# Note: vlm-caption/init.yaml is generated at container startup by start.sh,
+# substituting $STORAGE_DIR into the template at config/vlm-caption-init.yaml.
+# This ensures the default base_directory is always correct for the actual mount path.
+
 # Install nginx dashboard config and remove default site
 RUN rm -f /etc/nginx/sites-enabled/default && \
     ln -s /app/nginx.conf /etc/nginx/sites-enabled/training-kitchen
