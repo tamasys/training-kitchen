@@ -7,7 +7,7 @@ services:
     ports:
       - "80:80" # Dashboard + all tools via nginx (primary entry point)
       - "8080:8080" # FileBrowser Quantum (direct)
-      - "5001:5001" # LLM API / llama_router (direct)
+      - "5001:5001" # llama_cpp (direct)
       - "5002:5002" # VLM Captioner (direct)
       - "5005:5005" # Coordinator API (direct)
       - "8676:8676" # AI Toolkit UI via nginx proxy (direct to 8675 bypasses the guard script)

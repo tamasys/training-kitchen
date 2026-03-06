@@ -161,7 +161,24 @@ def _autostop_watcher():
 threading.Thread(target=_autostop_watcher, daemon=True).start()
 
 
-# ── Routes ───────────────────────────────────────────────────────────────────
+# ── Engine (llama_cpp.server) ─────────────────────────────────────────────────────
+_engine_proc  = None   # subprocess.Popen or None
+_engine_lock  = threading.Lock()
+LLAMA_CONFIG  = '/tmp/llama_config.json'
+
+def _get_engine_status():
+    """Return (status_str, loaded_model_name | None)."""
+    with _engine_lock:
+        proc = _engine_proc
+    if proc is None:
+        return 'STOPPED', None
+    rc = proc.poll()
+    if rc is None:
+        return 'RUNNING', getattr(proc, '_model_name', None)
+    if rc == 0:
+        return 'STOPPED', None
+    return 'ERROR', None
+
 
 @app.route('/api/status')
 def status():
@@ -179,33 +196,94 @@ def status():
             "downloading": downloading,
         }
 
-    res = subprocess.run(['supervisorctl', 'status', 'llama_router'],
-                         capture_output=True, text=True)
-    out = res.stdout.strip()
-    out_lower = out.lower()
-    if   "running"  in out_lower: data["engine_status"] = "RUNNING"
-    elif "starting" in out_lower: data["engine_status"] = "STARTING"
-    elif "fatal"    in out_lower or "error" in out_lower: data["engine_status"] = "ERROR"
-    else:                         data["engine_status"] = "STOPPED"
-    data["engine"] = data["engine_status"] == "RUNNING"
-    data["engine_output"] = out   # raw line for debugging
+    eng_status, eng_model = _get_engine_status()
+    data["engine_status"] = eng_status
+    data["engine"]        = eng_status == "RUNNING"
+    data["engine_model"]  = eng_model
     return jsonify(data)
 
 
-@app.route('/api/engine/<action>')
+@app.route('/api/engine/<action>', methods=['GET', 'POST'])
 def engine_ctl(action):
+    global _engine_proc
     if action not in ('start', 'stop'):
         return jsonify({"error": "invalid action"}), 400
-    res = subprocess.run(
-        ['supervisorctl', action, 'llama_router'],
-        capture_output=True, text=True
+
+    if action == 'stop':
+        with _engine_lock:
+            proc = _engine_proc
+            _engine_proc = None
+        if proc and proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+            print("[engine] stopped.", flush=True)
+        return jsonify({"status": "ok"})
+
+    # ── START ──────────────────────────────────────────────────────────────────
+    with _engine_lock:
+        if _engine_proc and _engine_proc.poll() is None:
+            return jsonify({"status": "already_running"})
+
+    # Collect installed models (exclude mmproj sidecars)
+    reg = get_registry()
+    model_cfgs = []
+    for mid, entry in reg.items():
+        path = entry['path']
+        if not os.path.exists(path):
+            continue
+        cfg = {
+            "model":          path,
+            "model_alias":    mid,
+            "n_gpu_layers":   -1,
+            "n_ctx":          4096,
+            "chat_format":    "llava-1-5",
+        }
+        # Attach mmproj if one exists alongside the model
+        mmproj_name = entry.get('mmproj')
+        if mmproj_name:
+            mmproj_path = os.path.join(os.path.dirname(path), mmproj_name)
+            if os.path.exists(mmproj_path):
+                cfg["clip_model_path"] = mmproj_path
+        model_cfgs.append(cfg)
+
+    if not model_cfgs:
+        return jsonify({"status": "error",
+                        "detail": "No models installed. Download a model first."})
+
+    # Write the llama_cpp config file
+    config = {
+        "host":   "0.0.0.0",
+        "port":   5001,
+        "models": model_cfgs,
+    }
+    with open(LLAMA_CONFIG, 'w') as f:
+        json.dump(config, f, indent=2)
+    print(f"[engine] Starting with {len(model_cfgs)} model(s): "
+          f"{[m['model_alias'] for m in model_cfgs]}", flush=True)
+
+    proc = subprocess.Popen(
+        ['python3', '-m', 'llama_cpp.server', '--config_file', LLAMA_CONFIG],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
     )
-    # Return the supervisorctl output so the UI can surface errors
-    out = (res.stdout + res.stderr).strip()
-    print(f"[engine] supervisorctl {action} (rc={res.returncode}): {out}", flush=True)
-    if res.returncode != 0:
-        return jsonify({"status": "error", "detail": out})
-    return jsonify({"status": "ok", "detail": out})
+    proc._model_name = model_cfgs[0]['model_alias'] if model_cfgs else None
+
+    with _engine_lock:
+        _engine_proc = proc
+
+    # Stream llama_cpp logs to docker logs in background
+    def _tail():
+        for line in iter(proc.stdout.readline, ''):
+            print(f"[llama] {line.rstrip()}", flush=True)
+        proc.wait()
+        print(f"[engine] process exited (rc={proc.returncode}).", flush=True)
+    threading.Thread(target=_tail, daemon=True).start()
+
+    return jsonify({"status": "ok", "models": [m['model_alias'] for m in model_cfgs]})
 
 
 @app.route('/api/download/<id>')
