@@ -34,14 +34,16 @@ RUN git clone --depth=1 https://github.com/ostris/ai-toolkit.git /app/ai-toolkit
     cd /app/ai-toolkit/ui && npm install
 
 RUN git clone --depth=1 https://github.com/victorchall/vlm-caption.git /app/vlm-caption && \
-    pip3 install -q --no-cache-dir -r /app/vlm-caption/requirements.txt
+    pip3 install -q --no-cache-dir -r /app/vlm-caption/requirements.txt && \
+    rm -f /app/vlm-caption/caption.yaml   # never bake in a stale working config
 
 # flux_train_ui.py used an old Gradio API - removed, using the real Node.js UI instead
 
 # Copy app files (separate layer so upstream repo changes don't bust this cache)
 WORKDIR /app
 COPY . .
-RUN chmod +x start.sh scripts/updater.sh
+RUN chmod +x start.sh scripts/updater.sh && \
+    rm -f /app/vlm-caption/caption.yaml   # safety net: COPY . . can't add it, but be explicit
 
 # Note: vlm-caption/init.yaml is generated at container startup by start.sh,
 # substituting $STORAGE_DIR into the template at config/vlm-caption-init.yaml.

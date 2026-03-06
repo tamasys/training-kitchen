@@ -1,0 +1,4 @@
+# vlm-caption working config — generated at runtime, must not be baked into the image.
+# init.yaml is our template; caption.yaml is the live user config written by the app.
+caption.yaml
+caption.yaml.backup

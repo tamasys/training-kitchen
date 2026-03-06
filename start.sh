@@ -9,13 +9,14 @@ echo "Storage directory: $STORAGE_DIR"
 
 mkdir -p "$STORAGE_DIR/models" "$STORAGE_DIR/outputs" "$STORAGE_DIR/config" "$STORAGE_DIR/images"
 
-# Generate vlm-caption's init.yaml from the template, substituting the real storage path.
-# This sets the default base_directory to $STORAGE_DIR/images so it's correct on first run
-# regardless of whether the volume is mounted at /workspace, /mnt/workspace, etc.
+# Generate vlm-caption's init.yaml from our template, substituting the real storage path.
+# On a fresh container (no saved caption.yaml), the app copies this to caption.yaml
+# automatically on first run. User-saved settings in caption.yaml are left untouched
+# so they survive container restarts.
 sed "s|__STORAGE_DIR__|$STORAGE_DIR|g" \
     /app/config/vlm-caption-init.yaml \
     > /app/vlm-caption/init.yaml
-echo "VLM Caption init.yaml written with storage path: $STORAGE_DIR"
+echo "[vlm-caption] init.yaml written with base_directory: $STORAGE_DIR/images"
 
 # Start all services immediately (toolkits are baked in; updater runs in background)
 exec /usr/bin/supervisord -c /app/supervisord.conf
