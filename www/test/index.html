@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Training Kitchen - Automated System Diagnostics</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap');
+
+        :root {
+            --bg: #0f0e0e;
+            --surface: #1a1818;
+            --surface-hover: #242121;
+            --border: #2d2a2a;
+            --text: #e2d9d0;
+            --text-muted: #8a8075;
+            --accent: #c6b89e;
+            --accent-glow: rgba(198, 184, 158, 0.15);
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --running: #3b82f6;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 3rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        header {
+            text-align: center;
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, #fff, var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        p.subtitle {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px var(--accent-glow);
+            animation: slideUp 0.5s ease-out 0.1s both;
+        }
+
+        button {
+            background: var(--text);
+            color: var(--bg);
+            border: none;
+            padding: 0.8rem 1.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 255, 255, 0.1);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            background: var(--border);
+            color: var(--text-muted);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .progress-indicator {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            font-weight: 500;
+        }
+
+        .test-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .test-item {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.25rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            transition: all 0.3s ease;
+            animation: slideUp 0.5s ease-out both;
+        }
+
+        .test-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            font-size: 1.05rem;
+        }
+
+        .test-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            background: var(--border);
+            color: var(--text-muted);
+        }
+
+        .test-status.running {
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--running);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .test-status.running::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 1.5s infinite;
+        }
+
+        .test-status.passed {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .test-status.passed::before {
+            content: '✓';
+        }
+
+        .test-status.failed {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--error);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .test-status.failed::before {
+            content: '✗';
+        }
+
+        .test-status.skipped {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .test-status.skipped::before {
+            content: '⏭';
+        }
+
+        .console {
+            background: #090909;
+            border-radius: 8px;
+            border: 1px solid #1f1f1f;
+            padding: 1rem;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.85rem;
+            color: #a0a0a0;
+            height: 180px;
+            overflow-y: auto;
+            display: none;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .console.active {
+            display: block;
+        }
+
+        .log-info {
+            color: #a0a0a0;
+        }
+
+        .log-success {
+            color: var(--success);
+        }
+
+        .log-error {
+            color: var(--error);
+        }
+
+        .log-warn {
+            color: var(--warning);
+        }
+
+        .log-highlight {
+            color: #38bdf8;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 0.4;
+            }
+
+            50% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: 0.4;
+            }
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <header>
+            <h1>System Diagnostics</h1>
+            <p class="subtitle">Automated integration testing for Training Kitchen.</p>
+        </header>
+
+        <div class="controls">
+            <div class="progress-indicator">
+                <span id="overall-status">Ready to initialize tests</span>
+            </div>
+            <button id="run-btn" onclick="startDiagnostics()">Run Diagnostics</button>
+        </div>
+
+        <div class="test-list" id="tests-container"></div>
+    </div>
+
+    <script>
+        const tests = [
+            { id: 'platform', name: 'Fetch Platform Configurations', fn: testPlatformUrls },
+            { id: 'engine-empty', name: 'Start Engine (Without Checking GGUF)', fn: testEngineStartNoGGUF },
+            { id: 'download-joy', name: 'Download / Verify JoyCaption', fn: testDownloadJoycaption },
+            { id: 'engine-start', name: 'Start Engine (With JoyCaption)', fn: testEngineStart },
+            { id: 'vlm-link', name: 'Test VLM Captioner Connection', fn: testVlmConnection },
+            { id: 'vlm-caption', name: 'Test VLM Captioning Pipeline', fn: testVlmCaptioning },
+            { id: 'trainer-link', name: 'Test Ostris AI Toolkit Link', fn: testTrainerLink },
+            { id: 'files-link', name: 'Test FileBrowser Link', fn: testFilesLink },
+        ];
+
+        let platformUrls = {};
+        let globalLog = [];
+
+        // ── UI Helpers ─────────────────────────────────────────────────────────────
+        function initUI() {
+            const container = document.getElementById('tests-container');
+            tests.forEach((t, i) => {
+                const delay = (i * 0.05) + 0.2;
+                container.innerHTML += `
+                <div class="test-item" id="item-${t.id}" style="animation-delay: ${delay}s">
+                    <div class="test-header">
+                        <span>${i + 1}. ${t.name}</span>
+                        <div class="test-status pending" id="status-${t.id}">Pending</div>
+                    </div>
+                    <div class="console" id="console-${t.id}"></div>
+                </div>
+            `;
+            });
+        }
+
+        function setStatus(id, state, message = '') {
+            const el = document.getElementById(`status-${id}`);
+            el.className = `test-status ${state}`;
+            if (state === 'pending') el.textContent = 'Pending';
+            if (state === 'running') el.textContent = message || 'Running...';
+            if (state === 'passed') el.textContent = message || 'Passed';
+            if (state === 'failed') el.textContent = message || 'Failed';
+            if (state === 'skipped') el.textContent = message || 'Skipped';
+        }
+
+        function log(id, msg, type = 'info') {
+            const cons = document.getElementById(`console-${id}`);
+            if (!cons) return;
+            cons.classList.add('active');
+
+            const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false, fractionalSecondDigits: 2 });
+            const line = document.createElement('div');
+            line.className = `log-${type}`;
+            line.textContent = `[${timestamp}] ${msg}`;
+            cons.appendChild(line);
+            cons.scrollTop = cons.scrollHeight;
+        }
+
+        // ── Core Utils ─────────────────────────────────────────────────────────────
+        async function fetchJSON(url, options = {}) {
+            const res = await fetch(url, options);
+            if (!res.ok && res.status >= 500) throw new Error(`HTTP ${res.status}`);
+            // Read text first, then try to parse JSON
+            const text = await res.text();
+            try { return JSON.parse(text); } catch { return text; }
+        }
+
+        const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+        // ── Test Implementations ────────────────────────────────────────────────────
+        async function testPlatformUrls(id) {
+            log(id, "Fetching /api/platform...");
+            const data = await fetchJSON('/api/platform');
+            platformUrls = data.urls || {
+                files: 'http://localhost:8080',
+                vlm: 'http://localhost:5002',
+                trainer: 'http://localhost:8676'
+            };
+            log(id, `Loaded Platform URLs: ${JSON.stringify(platformUrls)}`, 'log-highlight');
+            return true;
+        }
+
+        async function testEngineStartNoGGUF(id) {
+            log(id, "Checking if any models are installed first...");
+            const stat = await fetchJSON('/api/status');
+            const hasModels = Object.values(stat.models).some(m => m.installed);
+
+            if (stat.engine) {
+                log(id, "Engine currently running. Suppressing it for a clean slate.", "log-warn");
+                await fetch('/api/engine/stop', { method: 'POST' });
+                await sleep(2000);
+            }
+
+            if (hasModels) {
+                log(id, "Models are already installed. Start engine will succeed unexpectedly. Skipping this failure simulation.", "log-warn");
+                return 'skipped';
+            }
+
+            log(id, "Attempting to POST /api/engine/start without installed models...");
+            const startReq = await fetchJSON('/api/engine/start', { method: 'POST' });
+
+            if (startReq.status === 'error') {
+                log(id, `Success: Engine rejected start with expected error: ${startReq.detail}`, 'success');
+                return true;
+            } else {
+                log(id, `Engine didn't throw expected error! Response: ${JSON.stringify(startReq)}`, 'error');
+                return false;
+            }
+        }
+
+        async function testDownloadJoycaption(id) {
+            log(id, "Checking joycaption install status...");
+            const stat = await fetchJSON('/api/status');
+            const isInstalled = stat.models?.joycaption?.installed;
+
+            if (isInstalled) {
+                log(id, "Joycaption already installed. Skipping download.", "success");
+                return 'skipped';
+            }
+
+            log(id, "Initiating download for joycaption...");
+            await fetchJSON('/api/download/joycaption');
+            log(id, "Connecting to download progress SSE stream...", "log-highlight");
+
+            return new Promise((resolve) => {
+                const es = new EventSource('/api/download/progress/joycaption');
+                let lastPct = -1;
+
+                es.onmessage = (e) => {
+                    if (e.data === '__DONE__') {
+                        es.close();
+                        log(id, "Download finished completely.", "success");
+                        resolve(true);
+                    } else if (e.data.startsWith('__STATUS__')) {
+                        log(id, "Status: " + e.data.replace('__STATUS__', ''), "highlight");
+                    } else {
+                        const pctMatch = e.data.match(/(\d+)%/);
+                        if (pctMatch) {
+                            const pct = parseInt(pctMatch[1], 10);
+                            if (pct !== lastPct && pct % 10 === 0) { // Only log every 10%
+                                lastPct = pct;
+                                log(id, `Progress: ${pct}%`);
+                            }
+                        } else if (e.data.includes("Downloading")) {
+                            // ignore noise
+                        } else {
+                            log(id, `> ${e.data}`);
+                        }
+                    }
+                };
+
+                es.onerror = () => {
+                    es.close();
+                    log(id, "Stream disconnected or errored out.", "error");
+                    resolve(false);
+                };
+            });
+        }
+
+        async function testEngineStart(id) {
+            log(id, "Triggering /api/engine/start POST request...");
+            const startReq = await fetchJSON('/api/engine/start', { method: 'POST' });
+
+            if (startReq.status === 'error') {
+                log(id, `Failed to start engine: ${startReq.detail}`, 'error');
+                return false;
+            }
+
+            log(id, "Engine process spawned. Entering polling loop to verify VRAM loading...");
+
+            for (let i = 0; i < 30; i++) {
+                await sleep(3000);
+                const check = await fetchJSON('/api/status');
+                log(id, `Ping ${i + 1}: Engine Status = ${check.engine_status}`);
+
+                if (check.engine_status === 'RUNNING') {
+                    log(id, `Engine running successfully with models: ${check.engine_model}`, "success");
+                    return true;
+                } else if (check.engine_status === 'ERROR') {
+                    log(id, "Engine crashed or threw an error during startup.", "error");
+                    return false;
+                }
+            }
+
+            log(id, "Timeout reached waiting for engine to start.", "error");
+            return false;
+        }
+
+        async function testVlmConnection(id) {
+            const url = `${platformUrls.vlm}/api/health`;
+            log(id, `Fetching ${url}...`);
+            try {
+                const res = await fetchJSON(url);
+                log(id, `Response parsed: ${JSON.stringify(res)}`, "success");
+                return true;
+            } catch (e) {
+                log(id, `Network or parse error on VLM link: ${e.message}`, "error");
+                return false;
+            }
+        }
+
+        async function testVlmCaptioning(id) {
+            const check = await fetchJSON('/api/status');
+            if (check.engine_status !== 'RUNNING') {
+                log(id, "Engine is not running! Captioning will likely fail.", "error");
+            }
+
+            const url = `${platformUrls.vlm}/api/run`;
+            log(id, `Executing captioning via SSE ${url}...`);
+
+            return new Promise((resolve) => {
+                const es = new EventSource(url);
+                let hasReturnedData = false;
+
+                es.onmessage = (e) => {
+                    hasReturnedData = true;
+                    if (e.data.startsWith('[COMPLETE]')) {
+                        log(id, "Pipeline finished gracefully.", "success");
+                        es.close();
+                        resolve(true);
+                    } else if (e.data.startsWith('[ERROR]')) {
+                        log(id, `Pipeline threw error: ${e.data}`, "error");
+                        es.close();
+                        resolve(false);
+                    } else if (!e.data.startsWith('[KEEPALIVE]')) {
+                        log(id, `Output: ${e.data}`);
+                    }
+                };
+
+                es.onerror = (e) => {
+                    es.close();
+                    if (!hasReturnedData) {
+                        log(id, "Stream errored immediately (could not connect).", "error");
+                        resolve(false);
+                    } else {
+                        log(id, "Stream disconnected prematurely.", "error");
+                        resolve(false);
+                    }
+                };
+            });
+        }
+
+        async function testTrainerLink(id) {
+            const url = `${platformUrls.trainer}/api/queue`;
+            log(id, `Fetching JSON array from Trainer backend ${url}...`);
+            try {
+                const res = await fetch(url);
+                if (!res.ok) {
+                    log(id, `Trainer link responded with HTTP ${res.status}`, "error");
+                    return false;
+                }
+                const data = await res.json();
+                log(id, `Trainer Link Ok. Result is array: ${Array.isArray(data)}`, "success");
+                return Array.isArray(data);
+            } catch (e) {
+                log(id, `Trainer link failed: ${e.message}`, "error");
+                return false;
+            }
+        }
+
+        async function testFilesLink(id) {
+            const url = platformUrls.files;
+            log(id, `Testing FileBrowser Quantum host frontend at ${url}...`);
+            try {
+                const res = await fetch(url, { mode: 'no-cors' }); // FBQ is on a diff port, CORS applies
+                log(id, `Request resolved successfully without network exception.`, "success");
+                return true;
+            } catch (e) {
+                log(id, `Filebrowser failed to resolve at ${url}. Exception: ${e.message}`, "error");
+                return false;
+            }
+        }
+
+
+        // ── Test Runner ────────────────────────────────────────────────────────────
+        async function startDiagnostics() {
+            const btn = document.getElementById('run-btn');
+            const st = document.getElementById('overall-status');
+
+            btn.disabled = true;
+            btn.textContent = 'Running...';
+
+            // Reset styles
+            tests.forEach(t => {
+                setStatus(t.id, 'pending');
+                const cons = document.getElementById(`console-${t.id}`);
+                if (cons) cons.innerHTML = '';
+            });
+
+            let passedCount = 0;
+            let skipCount = 0;
+            let failCount = 0;
+
+            for (const test of tests) {
+                st.textContent = `Running module: ${test.name}...`;
+                setStatus(test.id, 'running');
+
+                try {
+                    const res = await test.fn(test.id);
+                    if (res === true) {
+                        setStatus(test.id, 'passed');
+                        passedCount++;
+                    } else if (res === 'skipped') {
+                        setStatus(test.id, 'skipped');
+                        skipCount++;
+                    } else {
+                        setStatus(test.id, 'failed');
+                        failCount++;
+                    }
+                } catch (e) {
+                    log(test.id, `Unhandled exception in test logic: ${e.message}`, 'error');
+                    console.error(e);
+                    setStatus(test.id, 'failed');
+                    failCount++;
+                }
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Run Diagnostics Again';
+
+            if (failCount > 0) {
+                st.innerHTML = `<span style="color:var(--error)">Completed with errors. ${passedCount} passed, ${skipCount} skipped, ${failCount} failed.</span>`;
+            } else {
+                st.innerHTML = `<span style="color:var(--success)">All systems green. ${passedCount} passed, ${skipCount} skipped.</span>`;
+            }
+        }
+
+        initUI();
+    </script>
+
+</body>
+
+</html>

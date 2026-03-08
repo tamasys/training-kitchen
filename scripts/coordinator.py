@@ -11,6 +11,48 @@ CORS(app)
 STORAGE_DIR = os.environ.get('STORAGE_DIR', '/workspace').rstrip('/')
 print(f"[coordinator] Storage directory: {STORAGE_DIR}", flush=True)
 
+# ── Platform detection ────────────────────────────────────────────────────────
+# Set PLATFORM=runpod in the RunPod template environment to enable RunPod-specific
+# features (auto-stop, public URLs via pod ID).  Leave unset for local development.
+PLATFORM      = os.environ.get('PLATFORM', '').lower().strip()   # 'runpod' | ''
+RUNPOD_POD_ID = os.environ.get('RUNPOD_POD_ID', '')
+
+def _build_platform_info():
+    """Return a dict describing the current platform and reachable tool URLs."""
+    if PLATFORM == 'runpod' and RUNPOD_POD_ID:
+        def rp_url(port):
+            return f"https://{RUNPOD_POD_ID}-{port}.proxy.runpod.net"
+        return {
+            "platform": "runpod",
+            "pod_id":   RUNPOD_POD_ID,
+            "features": {"autostop": True},
+            "urls": {
+                "dashboard": rp_url(80),
+                "files":     rp_url(8080),
+                "vlm":       rp_url(5002),
+                "trainer":   rp_url(8676),
+                "llm_api":   rp_url(5001),
+                "coordinator": rp_url(80),   # /api/ proxied through port-80 nginx
+            },
+        }
+    # Local / unknown — assume localhost
+    return {
+        "platform": PLATFORM or "local",
+        "pod_id":   None,
+        "features": {"autostop": False},
+        "urls": {
+            "dashboard":   "http://localhost",
+            "files":       "http://localhost:8080",
+            "vlm":         "http://localhost:5002",
+            "trainer":     "http://localhost:8676",
+            "llm_api":     "http://localhost:5001",
+            "coordinator": "http://localhost",
+        },
+    }
+
+print(f"[coordinator] Platform: {PLATFORM or 'local'}", flush=True)
+
+
 # ── Download tracking ────────────────────────────────────────────────────────
 # id -> {"proc": Popen, "log": path, "done": bool}
 _downloads = {}
@@ -48,11 +90,11 @@ def _stream_output(proc, log_path, model_id, final=True):
     status = "complete" if rc == 0 else f"failed (exit {rc})"
     print(f"{prefix} Download {status}.", flush=True)
     if final:
+        with open(log_path, 'a') as lf:
+            lf.write(f"\n__STATUS__{status}\n")
         with _lock:
             if model_id in _downloads:
                 _downloads[model_id]["done"] = True
-        with open(log_path, 'a') as lf:
-            lf.write(f"\n__STATUS__{status}\n")
 
 
 # ── Auto-stop state ──────────────────────────────────────────────────────────
@@ -78,13 +120,13 @@ def _is_vlm_idle():
 def _is_trainer_idle():
     """Return True when Ostris AI Toolkit has no active training job.
 
-    The Ostris UI (port 8675) exposes a simple /queue endpoint that returns
+    The Ostris UI (port 8675) exposes a simple /api/queue endpoint that returns
     a list of jobs.  An empty list, or all jobs in a terminal state
     (completed / failed / cancelled), counts as idle.
     We fall back to True (idle) if the endpoint is not reachable.
     """
     try:
-        req = urllib.request.urlopen("http://localhost:8675/queue", timeout=4)
+        req = urllib.request.urlopen("http://localhost:8675/api/queue", timeout=4)
         data = json.loads(req.read())
         # data is expected to be a list of job dicts with a "status" field
         if isinstance(data, list):
@@ -180,6 +222,38 @@ def _get_engine_status():
     return 'ERROR', None
 
 
+@app.route('/api/platform')
+def platform_info():
+    """Return the current platform and tool URLs.
+    The frontend uses this instead of URL-sniffing so the server is the
+    single source of truth about the deployment environment.
+    """
+    return jsonify(_build_platform_info())
+
+
+@app.route('/api/coordinator/<path:subpath>', methods=['GET', 'POST', 'PUT', 'DELETE'])
+def coordinator_alias(subpath):
+    """Mirror of /api/<subpath>.
+    Nginx on the VLM (port 5002) and AI Toolkit (port 8676) server blocks
+    forward /api/ to those tools' own backends. This /api/coordinator/ prefix
+    lets the autostop-guard reach the coordinator from any page without
+    knowing the absolute coordinator URL.
+    """
+    import urllib.parse
+    from flask import stream_with_context
+    # Re-dispatch internally by reconstructing the target URL and call the view
+    target = f"/api/{subpath}"
+    with app.test_request_context(
+        target,
+        method=request.method,
+        data=request.get_data(),
+        content_type=request.content_type,
+        headers=request.headers,
+    ):
+        rv = app.dispatch_request()
+    return rv
+
+
 @app.route('/api/status')
 def status():
     reg = get_registry()
@@ -227,52 +301,51 @@ def engine_ctl(action):
         if _engine_proc and _engine_proc.poll() is None:
             return jsonify({"status": "already_running"})
 
-    # Collect installed models (exclude mmproj sidecars)
-    reg = get_registry()
-    model_cfgs = []
-    for mid, entry in reg.items():
-        path = entry['path']
-        if not os.path.exists(path):
-            continue
-        cfg = {
-            "model":          path,
-            "model_alias":    mid,
-            "n_gpu_layers":   -1,
-            "n_ctx":          4096,
-            "chat_format":    "llava-1-5",
+        # Collect installed models (exclude mmproj sidecars)
+        reg = get_registry()
+        model_cfgs = []
+        for mid, entry in reg.items():
+            path = entry['path']
+            if not os.path.exists(path):
+                continue
+            cfg = {
+                "model":          path,
+                "model_alias":    mid,
+                "n_gpu_layers":   -1,
+                "n_ctx":          4096,
+                "chat_format":    "llava-1-5",
+            }
+            # Attach mmproj if one exists alongside the model
+            mmproj_name = entry.get('mmproj')
+            if mmproj_name:
+                mmproj_path = os.path.join(os.path.dirname(path), mmproj_name)
+                if os.path.exists(mmproj_path):
+                    cfg["clip_model_path"] = mmproj_path
+            model_cfgs.append(cfg)
+    
+        if not model_cfgs:
+            return jsonify({"status": "error",
+                            "detail": "No models installed. Download a model first."})
+    
+        # Write the llama_cpp config file
+        config = {
+            "host":   "0.0.0.0",
+            "port":   5001,
+            "models": model_cfgs,
         }
-        # Attach mmproj if one exists alongside the model
-        mmproj_name = entry.get('mmproj')
-        if mmproj_name:
-            mmproj_path = os.path.join(os.path.dirname(path), mmproj_name)
-            if os.path.exists(mmproj_path):
-                cfg["clip_model_path"] = mmproj_path
-        model_cfgs.append(cfg)
+        with open(LLAMA_CONFIG, 'w') as f:
+            json.dump(config, f, indent=2)
+        print(f"[engine] Starting with {len(model_cfgs)} model(s): "
+              f"{[m['model_alias'] for m in model_cfgs]}", flush=True)
+    
+        proc = subprocess.Popen(
+            ['python3', '-m', 'llama_cpp.server', '--config_file', LLAMA_CONFIG],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        proc._model_name = model_cfgs[0]['model_alias'] if model_cfgs else None
 
-    if not model_cfgs:
-        return jsonify({"status": "error",
-                        "detail": "No models installed. Download a model first."})
-
-    # Write the llama_cpp config file
-    config = {
-        "host":   "0.0.0.0",
-        "port":   5001,
-        "models": model_cfgs,
-    }
-    with open(LLAMA_CONFIG, 'w') as f:
-        json.dump(config, f, indent=2)
-    print(f"[engine] Starting with {len(model_cfgs)} model(s): "
-          f"{[m['model_alias'] for m in model_cfgs]}", flush=True)
-
-    proc = subprocess.Popen(
-        ['python3', '-m', 'llama_cpp.server', '--config_file', LLAMA_CONFIG],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-    proc._model_name = model_cfgs[0]['model_alias'] if model_cfgs else None
-
-    with _engine_lock:
         _engine_proc = proc
 
     # Stream llama_cpp logs to docker logs in background
@@ -301,14 +374,15 @@ def dl(id):
         if id in _downloads and not _downloads[id].get("done", False):
             return jsonify({"status": "already_downloading"})
 
-    repo     = entry['repo']
-    filename = entry.get('file')
-    mmproj   = entry.get('mmproj')   # optional vision projector sidecar
-    dest_dir = os.path.dirname(entry['path'])
-    os.makedirs(dest_dir, exist_ok=True)
-
-    log_path = os.path.join(LOG_DIR, f"{id}.log")
-    open(log_path, 'w').close()
+        repo     = entry['repo']
+        filename = entry.get('file')
+        mmproj   = entry.get('mmproj')   # optional vision projector sidecar
+        dest_dir = os.path.dirname(entry['path'])
+        os.makedirs(dest_dir, exist_ok=True)
+    
+        log_path = os.path.join(LOG_DIR, f"{id}.log")
+        open(log_path, 'w').close()
+        _downloads[id] = {"proc": None, "log": log_path, "done": False}
 
     def build_cmd(file=None):
         base = ["huggingface-cli", "download", repo]

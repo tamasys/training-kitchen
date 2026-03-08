@@ -386,17 +386,20 @@
         <div class="card">
             <h3>Files</h3>
             <p class="status">Manage your datasets in /workspace with File Browser Quantum.</p>
-            <button class="btn btn-launch" onclick="window.open(getToolUrl(8080))">Open Explorer</button>
+            <a id="btn-files" href="#" target="_blank" class="btn btn-launch" onclick="this.href=getToolUrl(8080)">Open
+                Explorer</a>
         </div>
         <div class="card">
             <h3>Captioning</h3>
             <p class="status">AI-powered batch captioning for training datasets with VLM Captioner.</p>
-            <button class="btn btn-launch" onclick="window.open(getToolUrl(5002))">Open Tool</button>
+            <a id="btn-vlm" href="#" target="_blank" class="btn btn-launch" onclick="this.href=getToolUrl(5002)">Open
+                Tool</a>
         </div>
         <div class="card">
             <h3>Training</h3>
             <p class="status">LoRA and full fine-tune training interface with Ostris AI Toolkit.</p>
-            <button class="btn btn-launch" onclick="window.open(getToolUrl(8676)+'/dashboard')">Launch Trainer</button>
+            <a id="btn-trainer" href="#" target="_blank" class="btn btn-launch"
+                onclick="this.href=getToolUrl(8676)+'/dashboard'">Launch Trainer</a>
         </div>
     </div>
 
@@ -404,13 +407,33 @@
     <div id="models" class="grid"></div>
 
     <script>
-        // ── RunPod detection ─────────────────────────────────────────────────
-        const IS_RUNPOD = /\.proxy\.runpod\.net$/.test(location.hostname);
-        if (IS_RUNPOD) document.getElementById('autostop-card').classList.add('visible');
+        // ── Platform ─────────────────────────────────────────────────────────
+        // Fetch environment info from the coordinator — no URL sniffing needed.
+        let _platform = { platform: 'local', features: {}, urls: {} };
+
+        async function initPlatform() {
+            try {
+                const res = await fetch('/api/platform');
+                _platform = await res.json();
+            } catch (e) {
+                console.warn('[platform] Could not reach coordinator:', e);
+            }
+
+            // Show autostop card only on platforms that support it
+            if (_platform.features && _platform.features.autostop) {
+                document.getElementById('autostop-card').classList.add('visible');
+            }
+
+            // Wire up tool button URLs from platform data
+            const u = _platform.urls || {};
+            if (u.files) document.getElementById('btn-files').href = u.files;
+            if (u.vlm) document.getElementById('btn-vlm').href = u.vlm;
+            if (u.trainer) document.getElementById('btn-trainer').href = u.trainer;
+        }
 
         // ── Auto-stop ────────────────────────────────────────────────────────
         async function pollAutostop() {
-            if (!IS_RUNPOD) return;
+            if (!(_platform.features && _platform.features.autostop)) return;
             try {
                 const res = await fetch('/api/autostop');
                 const data = await res.json();
@@ -476,10 +499,13 @@
         pollAutostop();
 
         // ── Helpers ─────────────────────────────────────────────────────────
+        // Tool URLs come from /api/platform — see initPlatform() above.
+        // Buttons use href attributes set dynamically; this is a no-op fallback.
         function getToolUrl(port) {
-            const rp = location.hostname.match(/^(.+)-(\d+)(\.proxy\.runpod\.net)$/);
-            if (rp) return `${location.protocol}//${rp[1]}-${port}${rp[3]}`;
-            return `${location.protocol}//${location.hostname}:${port}`;
+            // Legacy fallback only — prefer platform URLs set on button hrefs.
+            const u = _platform.urls || {};
+            const portMap = { 8080: u.files, 5002: u.vlm, 8676: u.trainer, 5001: u.llm_api };
+            return portMap[port] || `${location.protocol}//${location.hostname}:${port}`;
         }
 
         // Tracks SSE connections per model id so we don't open duplicates
@@ -575,7 +601,15 @@
             try {
                 const res = await fetch('/api/status');
                 const data = await res.json();
-                engineStatus = data.engine_status || (data.engine ? 'RUNNING' : 'STOPPED');
+
+                // If UI thinks it's starting but server says stopped, the start command
+                // hasn't taken effect yet; keep the UI in the starting state.
+                const serverStatus = data.engine_status || (data.engine ? 'RUNNING' : 'STOPPED');
+                if (engineStatus === 'STARTING' && serverStatus === 'STOPPED') {
+                    // Do not update engineStatus, wait for it to actually start
+                } else {
+                    engineStatus = serverStatus;
+                }
                 running = data.engine;
 
                 const info = document.getElementById('vram-info');
@@ -711,10 +745,10 @@
         }
 
         setInterval(update, 5000);
-        update();
+        initPlatform().then(() => update());
     </script>
 
-    <!-- Auto-stop warning overlay (RunPod only — no-ops silently elsewhere) -->
+    <!-- Auto-stop warning overlay (no-ops silently on platforms without autostop support) -->
     <script src="/autostop-guard.js"></script>
 </body>
 

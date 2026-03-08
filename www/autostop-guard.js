@@ -5,26 +5,21 @@
  * Include this script in any page that should warn the user before
  * the pod is automatically stopped due to inactivity.
  *
- * It reaches the coordinator via port 80 (the main nginx entry point)
- * so it works correctly from both the dashboard (port 80) and the
- * VLM captioner (port 5002).
+ * All coordinator API calls use the /api/coordinator/ relative path, which
+ * every nginx server block (port 80, 5002, 8676) proxies to the coordinator.
+ * No URL construction or platform detection is needed here.
  */
 (function () {
     'use strict';
 
     // ── Config ───────────────────────────────────────────────────────────────
-    const WARN_SECONDS   = 120;   // Show overlay when this many seconds remain
-    const POLL_IDLE_MS   = 30000; // Normal poll interval
-    const POLL_WARN_MS   = 5000;  // Fast poll interval when overlay is visible
+    const WARN_SECONDS = 120;   // Show overlay when this many seconds remain
+    const POLL_IDLE_MS = 30000; // Normal poll interval
+    const POLL_WARN_MS = 5000;  // Fast poll interval when overlay is visible
 
-    // ── Coordinator base URL ─────────────────────────────────────────────────
-    // Always talk to port 80 (nginx → coordinator) regardless of which port
-    // the current page is on, adapting for RunPod subdomain routing.
-    function coordinatorBase() {
-        const rp = location.hostname.match(/^(.+)-(\d+)(\.proxy\.runpod\.net)$/);
-        if (rp) return `${location.protocol}//${rp[1]}-80${rp[3]}`;
-        return `${location.protocol}//${location.hostname}`;   // same host, port 80
-    }
+    // All coordinator calls go via the stable /api/coordinator/ prefix, proxied
+    // to the coordinator by whichever nginx server block is serving this page.
+    const COORD = '/api/coordinator';
 
     // ── Inject styles ────────────────────────────────────────────────────────
     const style = document.createElement('style');
@@ -159,19 +154,19 @@
     document.body.appendChild(overlay);
 
     // ── State ────────────────────────────────────────────────────────────────
-    let _visible      = false;
-    let _pollTimer    = null;
-    let _lastSeconds  = null;
+    let _visible = false;
+    let _pollTimer = null;
+    let _lastSeconds = null;
 
     // ── API calls ────────────────────────────────────────────────────────────
     async function fetchStatus() {
-        const r = await fetch(coordinatorBase() + '/api/autostop');
+        const r = await fetch(COORD + '/autostop');
         return r.json();
     }
 
     window.__asStillHere = async function () {
         try {
-            await fetch(coordinatorBase() + '/api/autostop/ping', { method: 'POST' });
+            await fetch(COORD + '/autostop/ping', { method: 'POST' });
             hideOverlay();
             schedulePoll(POLL_IDLE_MS);
         } catch (e) { console.warn('[autostop-guard] ping failed', e); }
@@ -179,7 +174,7 @@
 
     window.__asDisable = async function () {
         try {
-            await fetch(coordinatorBase() + '/api/autostop', {
+            await fetch(COORD + '/autostop', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ enabled: false }),
@@ -194,13 +189,13 @@
         overlay.classList.add('as-visible');
         _visible = true;
 
-        const timerEl    = document.getElementById('as-timer');
-        const normalEl   = document.getElementById('as-normal-actions');
+        const timerEl = document.getElementById('as-timer');
+        const normalEl = document.getElementById('as-normal-actions');
         const stoppingEl = document.getElementById('as-stopping');
 
         if (stopping) {
-            timerEl.textContent   = '';
-            normalEl.style.display   = 'none';
+            timerEl.textContent = '';
+            normalEl.style.display = 'none';
             stoppingEl.classList.add('as-visible');
             document.getElementById('as-icon').textContent = '⚡';
             document.getElementById('as-title').textContent = 'Pod Shutting Down';
@@ -208,8 +203,8 @@
             const m = Math.floor(secondsRemaining / 60);
             const s = Math.floor(secondsRemaining % 60);
             timerEl.textContent = `${m}:${String(s).padStart(2, '0')}`;
-            timerEl.className   = 'as-timer' + (secondsRemaining < 30 ? ' as-critical' : '');
-            normalEl.style.display   = '';
+            timerEl.className = 'as-timer' + (secondsRemaining < 30 ? ' as-critical' : '');
+            normalEl.style.display = '';
             stoppingEl.classList.remove('as-visible');
         }
     }
@@ -219,8 +214,8 @@
         _visible = false;
 
         // Reset stopping state for next time
-        document.getElementById('as-icon').textContent      = '⏳';
-        document.getElementById('as-title').textContent     = 'Pod Shutting Down Soon';
+        document.getElementById('as-icon').textContent = '⏳';
+        document.getElementById('as-title').textContent = 'Pod Shutting Down Soon';
         document.getElementById('as-normal-actions').style.display = '';
         document.getElementById('as-stopping').classList.remove('as-visible');
     }
@@ -236,9 +231,9 @@
                 return;
             }
 
-            const secs     = data.seconds_remaining;
-            const warn     = data.enabled && data.timer_running &&
-                             secs != null && secs <= WARN_SECONDS;
+            const secs = data.seconds_remaining;
+            const warn = data.enabled && data.timer_running &&
+                secs != null && secs <= WARN_SECONDS;
             const stopping = data.stopping;
 
             if (stopping) {

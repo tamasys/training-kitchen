@@ -12,6 +12,10 @@ services:
       - "5005:5005" # Coordinator API (direct)
       - "8676:8676" # AI Toolkit UI via nginx proxy (direct to 8675 bypasses the guard script)
     environment:
+      # Set PLATFORM=runpod in RunPod template to enable RunPod-specific features
+      # (auto-stop toggle, correct public URLs from RUNPOD_POD_ID).
+      # Leave blank or omit for local development.
+      - PLATFORM=${PLATFORM:-}
       # Override for non-standard RunPod storage mounts (e.g. /mnt/workspace, /runpod-volume)
       - STORAGE_DIR=${STORAGE_DIR:-/workspace}
     volumes:
