@@ -385,7 +385,7 @@ def dl(id):
         _downloads[id] = {"proc": None, "log": log_path, "done": False}
 
     def build_cmd(file=None):
-        base = ["huggingface-cli", "download", repo]
+        base = ["hf", "download", repo]
         if file:
             base.append(file)
         return base + ["--local-dir", dest_dir]
