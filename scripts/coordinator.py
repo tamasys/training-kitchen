@@ -248,7 +248,7 @@ def coordinator_alias(subpath):
         method=request.method,
         data=request.get_data(),
         content_type=request.content_type,
-        headers=request.headers,
+        headers=dict(request.headers),
     ):
         rv = app.dispatch_request()
     return rv
