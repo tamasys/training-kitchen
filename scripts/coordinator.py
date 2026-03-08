@@ -388,7 +388,7 @@ def dl(id):
         base = ["huggingface-cli", "download", repo]
         if file:
             base.append(file)
-        return base + ["--local-dir", dest_dir, "--local-dir-use-symlinks=False"]
+        return base + ["--local-dir", dest_dir]
 
     def run_downloads():
         """Download main file, then mmproj sidecar (if any), sequentially."""
