@@ -39,3 +39,4 @@ hint_sources:
 base_directory: __STORAGE_DIR__/images
 recursive: true
 skip_if_txt_exists: true
+concurrent_batch_size: 4

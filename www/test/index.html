@@ -533,6 +533,7 @@
                         resolve(true);
                     } else if (e.data.startsWith('[ERROR]')) {
                         log(id, `Pipeline threw error: ${e.data}`, "error");
+                        log(id, `Have you opened the VLM GUI first?`, "error");
                         es.close();
                         resolve(false);
                     } else if (!e.data.startsWith('[KEEPALIVE]')) {

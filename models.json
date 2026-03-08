@@ -1,9 +1,10 @@
 {
   "joycaption": {
     "name": "JoyCaption Beta One",
-    "repo": "mradermacher/llama-joycaption-beta-one-hf-llava-GGUF",
-    "file": "llama-joycaption-beta-one-hf-llava.Q4_K_M.gguf",
-    "path": "{storage}/models/joycaption/llama-joycaption-beta-one-hf-llava.Q4_K_M.gguf",
+    "repo": "concedo/llama-joycaption-beta-one-hf-llava-mmproj-gguf",
+    "file": "llama-joycaption-beta-one-hf-llava-Q4_K_M.gguf",
+    "mmproj": "llama-joycaption-beta-one-llava-mmproj-model-f16.gguf",
+    "path": "{storage}/models/joycaption/llama-joycaption-beta-one-hf-llava-Q4_K_M.gguf",
     "desc": "Purpose-built model for generating highly detailed natural-language image captions. (~4.9 GB)"
   },
   "qwen25vl": {
