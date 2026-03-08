@@ -1,9 +1,13 @@
 from flask import Flask, jsonify, Response, request
 from flask_cors import CORS
-import subprocess, os, json, sys, threading, time, urllib.request
+import subprocess, os, json, sys, threading, time, urllib.request, logging
 
 app = Flask(__name__)
 CORS(app)
+
+# Silence standard HTTP 200 logs to prevent console spam during polling
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
 
 # ── Storage path ─────────────────────────────────────────────────────────────
 # Defaults to /workspace (RunPod Network Volume standard).
