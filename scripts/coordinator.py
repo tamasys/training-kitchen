@@ -388,8 +388,8 @@ def dl(id):
         open(log_path, 'w').close()
         _downloads[id] = {"proc": None, "log": log_path, "done": False}
 
-    def build_cmd(file=None):
-        base = ["hf", "download", repo]
+    def build_cmd(repo_override, file=None):
+        base = ["hf", "download", repo_override]
         if file:
             base.append(file)
         return base + ["--local-dir", dest_dir]
@@ -401,7 +401,7 @@ def dl(id):
         print(f"[download:{id}] Downloading {label} into {dest_dir}", flush=True)
 
         proc = subprocess.Popen(
-            build_cmd(filename),
+            build_cmd(repo, filename),
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, bufsize=1,
         )
@@ -410,16 +410,20 @@ def dl(id):
 
         _stream_output(proc, log_path, id, final=not mmproj)
 
-        if proc.returncode != 0 or not mmproj:
+        if proc.returncode != 0:
+            return
+
+        if not mmproj:
             return
 
         # ── mmproj sidecar ─────────────────────────────────────────────────
-        print(f"[download:{id}] Downloading mmproj '{mmproj}' into {dest_dir}", flush=True)
+        mmproj_repo = entry.get('mmproj_repo', repo) # Use specific mmproj_repo if provided, else main repo
+        print(f"[download:{id}] Downloading mmproj '{mmproj}' from '{mmproj_repo}' into {dest_dir}", flush=True)
         with open(log_path, 'a') as lf:
             lf.write(f"\n[Fetching vision projector: {mmproj}]\n")
 
         proc2 = subprocess.Popen(
-            build_cmd(mmproj),
+            build_cmd(mmproj_repo, mmproj),
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, bufsize=1,
         )

@@ -29,5 +29,18 @@ if [ -f /app/vlm-caption/caption_openai.py ]; then
     sed -i -E 's/stream=True,/stream=True, stop=["\\nUSER:", "USER:", "  -  USER", "ASSISTANT:", "\\nASSISTANT"],/g' /app/vlm-caption/caption_openai.py
 fi
 
+# Disable hardcoded debug logging that causes race conditions
+if [ -f /app/vlm-caption/caption_openai.py ]; then
+    sed -i 's/save_debug_task = asyncio.create_task(write_debug_messages(messages, i))/save_debug_task = asyncio.sleep(0)/g' /app/vlm-caption/caption_openai.py
+fi
+
+# Enable .json debug output
+# if [ -f /app/vlm-caption/file_utils/file_access.py ]; then
+#     sed -i 's/as f_cap:/as f_cap, aiofiles.open(debug_path, "w", encoding="utf-8") as f_log:/' /app/vlm-caption/file_utils/file_access.py
+#     sed -i 's/await asyncio.gather(f_cap.write(caption_text))/await asyncio.gather(f_cap.write(caption_text), f_log.write(debug_info))/' /app/vlm-caption/file_utils/file_access.py
+#     sed -i 's/#debug_path/debug_path/g' /app/vlm-caption/file_utils/file_access.py
+#     sed -i 's/\.log"/.json"/g' /app/vlm-caption/file_utils/file_access.py
+# fi
+
 # Start all services immediately (toolkits are baked in; updater runs in background)
 exec /usr/bin/supervisord -c /app/supervisord.conf

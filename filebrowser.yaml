@@ -5,7 +5,8 @@ server:
   sources:
     - path: /workspace
       name: Workspace
-
+    - path: /
+      name: root
 auth:
   methods:
     noauth: true
