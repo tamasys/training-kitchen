@@ -395,6 +395,61 @@
             transition: width 0.3s;
         }
 
+        .prompt-item {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+            align-items: flex-start;
+        }
+
+        .prompt-item textarea {
+            flex: 1;
+            min-height: 40px;
+        }
+
+        .btn-icon {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--muted);
+            width: 36px;
+            height: 36px;
+            border-radius: 7px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 1.1rem;
+            padding: 0;
+            line-height: 1;
+        }
+
+        .btn-icon:hover {
+            border-color: var(--red);
+            color: var(--red);
+            background: var(--red-dim);
+        }
+
+        .btn-add-prompt {
+            background: transparent;
+            border: 1px dashed var(--border);
+            color: var(--muted);
+            width: 100%;
+            padding: 0.5rem;
+            border-radius: 7px;
+            cursor: pointer;
+            font-size: 0.78rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            margin-bottom: 0.5rem;
+        }
+
+        .btn-add-prompt:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: var(--accent-dim);
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             .main {
@@ -483,11 +538,12 @@
 
             <div class="card">
                 <div class="section-title">Prompts <span
-                        style="font-size:0.65rem;color:var(--muted);text-transform:none;font-weight:400">(one per line —
-                        run in sequence)</span></div>
+                        style="font-size:0.65rem;color:var(--muted);text-transform:none;font-weight:400">(run in
+                        sequence)</span></div>
                 <div class="field">
-                    <textarea id="prompts" rows="6"></textarea>
-                    <div class="prompts-help">Each line is sent as a separate message. The final line becomes the
+                    <div id="prompts-container"></div>
+                    <button type="button" class="btn-add-prompt" onclick="addPrompt()">+ Add Prompt</button>
+                    <div class="prompts-help">Each prompt is sent as a separate message. The final prompt becomes the
                         caption.</div>
                 </div>
             </div>
@@ -589,6 +645,33 @@
         }
 
         // ── Config ────────────────────────────────────────────────
+        function addPrompt(value = '') {
+            const container = document.getElementById('prompts-container');
+            const div = document.createElement('div');
+            div.className = 'prompt-item';
+
+            const textarea = document.createElement('textarea');
+            textarea.rows = 2;
+            textarea.value = value;
+            textarea.placeholder = "Enter prompt...";
+
+            const delBtn = document.createElement('button');
+            delBtn.className = 'btn-icon';
+            delBtn.innerHTML = '×';
+            delBtn.title = "Delete prompt";
+            delBtn.onclick = () => {
+                if (container.children.length > 1) {
+                    div.remove();
+                } else {
+                    textarea.value = '';
+                }
+            };
+
+            div.appendChild(textarea);
+            div.appendChild(delBtn);
+            container.appendChild(div);
+        }
+
         async function loadConfig() {
             try {
                 const res = await fetch('/api/config');
@@ -621,9 +704,15 @@
                 document.getElementById('system_prompt').value = c.system_prompt || '';
                 document.getElementById('recursive').checked = c.recursive !== false;
                 document.getElementById('skip_if_txt_exists').checked = c.skip_if_txt_exists !== false;
-                if (Array.isArray(c.prompts)) {
-                    document.getElementById('prompts').value = c.prompts.join('\n');
+
+                const container = document.getElementById('prompts-container');
+                container.innerHTML = '';
+                if (Array.isArray(c.prompts) && c.prompts.length > 0) {
+                    c.prompts.forEach(p => addPrompt(p));
+                } else {
+                    addPrompt(); // Ensure at least one prompt exists
                 }
+
                 // Activate hint sources from config
                 activeHintSources = new Set(c.hint_sources || []);
                 document.querySelectorAll('.hint-chip').forEach(chip => {
@@ -633,9 +722,14 @@
             } catch (e) { log('Error loading config: ' + e.message, 'error'); }
         }
 
+        function getPrompts() {
+            const container = document.getElementById('prompts-container');
+            const textareas = container.querySelectorAll('textarea');
+            return Array.from(textareas).map(ta => ta.value.trim()).filter(Boolean);
+        }
+
         async function saveConfig() {
-            const prompts = document.getElementById('prompts').value
-                .split('\n').map(s => s.trim()).filter(Boolean);
+            const prompts = getPrompts();
             const config = {
                 base_directory: document.getElementById('base_directory').value,
                 base_url: document.getElementById('base_url').value,
