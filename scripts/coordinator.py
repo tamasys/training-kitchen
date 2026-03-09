@@ -220,7 +220,13 @@ def _get_engine_status():
         return 'STOPPED', None
     rc = proc.poll()
     if rc is None:
-        return 'RUNNING', getattr(proc, '_model_name', None)
+        model_name = getattr(proc, '_model_name', None)
+        try:
+            req = urllib.request.urlopen("http://localhost:5001/v1/models", timeout=0.5)
+            # If we get here, the HTTP server is up and responding
+            return 'RUNNING', model_name
+        except Exception:
+            return 'BOOTING', model_name
     if rc == 0:
         return 'STOPPED', None
     return 'ERROR', None
@@ -263,7 +269,7 @@ def status():
     reg = get_registry()
     data = {"models": {}, "engine": False, "engine_status": "STOPPED"}
     for k, v in reg.items():
-        installed = os.path.exists(v['path'])
+        installed = os.path.exists(os.path.join(v['path'], "config.json"))
         with _lock:
             dl_info = _downloads.get(k)
         downloading = dl_info is not None and not dl_info.get("done", False)
@@ -302,53 +308,61 @@ def engine_ctl(action):
 
     # ── START ──────────────────────────────────────────────────────────────────
     with _engine_lock:
-        if _engine_proc and _engine_proc.poll() is None:
-            return jsonify({"status": "already_running"})
+        req_data = request.get_json(silent=True) or {}
+        requested_model = req_data.get('model') or request.args.get('model')
 
-        # Collect installed models (exclude mmproj sidecars)
+        if _engine_proc and _engine_proc.poll() is None:
+            current_model = getattr(_engine_proc, '_model_name', None)
+            if requested_model and current_model != requested_model:
+                return jsonify({"status": "error", "detail": f"Engine is already running with model '{current_model}'."}), 400
+            return jsonify({"status": "already_running", "model": current_model})
+
+        # Collect installed models
         reg = get_registry()
-        model_cfgs = []
+        installed_models = []
         for mid, entry in reg.items():
             path = entry['path']
-            if not os.path.exists(path):
+            if not os.path.exists(os.path.join(path, "config.json")):
                 continue
-            cfg = {
-                "model":          path,
-                "model_alias":    mid,
-                "n_gpu_layers":   -1,
-                "n_ctx":          4096,
-                "chat_format":    "llava-1-5",
-            }
-            # Attach mmproj if one exists alongside the model
-            mmproj_name = entry.get('mmproj')
-            if mmproj_name:
-                mmproj_path = os.path.join(os.path.dirname(path), mmproj_name)
-                if os.path.exists(mmproj_path):
-                    cfg["clip_model_path"] = mmproj_path
-            model_cfgs.append(cfg)
+            installed_models.append({"alias": mid, "path": path})
     
-        if not model_cfgs:
+        if not installed_models:
             return jsonify({"status": "error",
                             "detail": "No models installed. Download a model first."})
     
-        # Write the llama_cpp config file
-        config = {
-            "host":   "0.0.0.0",
-            "port":   5001,
-            "models": model_cfgs,
-        }
-        with open(LLAMA_CONFIG, 'w') as f:
-            json.dump(config, f, indent=2)
-        print(f"[engine] Starting with {len(model_cfgs)} model(s): "
-              f"{[m['model_alias'] for m in model_cfgs]}", flush=True)
+        # Look for requested model, or just use the first one if neither specified nor available
+        target_model = None
+        if requested_model:
+            for m in installed_models:
+                if m['alias'] == requested_model:
+                    target_model = m
+                    break
+            if not target_model:
+                return jsonify({"status": "error", "detail": f"Model '{requested_model}' is not installed."}), 400
+        else:
+            target_model = installed_models[0]
+
+        print(f"[engine] Starting vLLM with model: {target_model['alias']}", flush=True)
+    
+        cmd = [
+            'python3', '-m', 'vllm.entrypoints.openai.api_server',
+            '--model', target_model['path'],
+            '--served-model-name', target_model['alias'],
+            '--host', '0.0.0.0',
+            '--port', '5001',
+            '--trust-remote-code',
+            '--limit-mm-per-prompt', 'image=1',
+            '--max-model-len', '8192',
+            '--gpu-memory-utilization', '0.90'
+        ]
     
         proc = subprocess.Popen(
-            ['python3', '-m', 'llama_cpp.server', '--config_file', LLAMA_CONFIG],
+            cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
         )
-        proc._model_name = model_cfgs[0]['model_alias'] if model_cfgs else None
+        proc._model_name = target_model['alias']
 
         _engine_proc = proc
 
@@ -360,7 +374,7 @@ def engine_ctl(action):
         print(f"[engine] process exited (rc={proc.returncode}).", flush=True)
     threading.Thread(target=_tail, daemon=True).start()
 
-    return jsonify({"status": "ok", "models": [m['model_alias'] for m in model_cfgs]})
+    return jsonify({"status": "ok", "model": target_model['alias']})
 
 
 @app.route('/api/download/<id>')
@@ -371,7 +385,7 @@ def dl(id):
 
     entry = registry[id]
 
-    if os.path.exists(entry['path']):
+    if os.path.exists(os.path.join(entry['path'], "config.json")):
         return jsonify({"status": "already_installed"})
 
     with _lock:
@@ -379,58 +393,30 @@ def dl(id):
             return jsonify({"status": "already_downloading"})
 
         repo     = entry['repo']
-        filename = entry.get('file')
-        mmproj   = entry.get('mmproj')   # optional vision projector sidecar
-        dest_dir = os.path.dirname(entry['path'])
+        dest_dir = entry['path']
         os.makedirs(dest_dir, exist_ok=True)
     
         log_path = os.path.join(LOG_DIR, f"{id}.log")
         open(log_path, 'w').close()
         _downloads[id] = {"proc": None, "log": log_path, "done": False}
 
-    def build_cmd(repo_override, file=None):
-        base = ["hf", "download", repo_override]
-        if file:
-            base.append(file)
-        return base + ["--local-dir", dest_dir]
+    def build_cmd(repo_override):
+        return ["huggingface-cli", "download", repo_override, "--local-dir", dest_dir]
 
     def run_downloads():
-        """Download main file, then mmproj sidecar (if any), sequentially."""
-        # ── Main file ──────────────────────────────────────────────────────
-        label = f"'{filename}'" if filename else f"repo '{repo}'"
+        """Download HuggingFace repository."""
+        label = f"repo '{repo}'"
         print(f"[download:{id}] Downloading {label} into {dest_dir}", flush=True)
 
         proc = subprocess.Popen(
-            build_cmd(repo, filename),
+            build_cmd(repo),
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, bufsize=1,
         )
         with _lock:
             _downloads[id]["proc"] = proc
 
-        _stream_output(proc, log_path, id, final=not mmproj)
-
-        if proc.returncode != 0:
-            return
-
-        if not mmproj:
-            return
-
-        # ── mmproj sidecar ─────────────────────────────────────────────────
-        mmproj_repo = entry.get('mmproj_repo', repo) # Use specific mmproj_repo if provided, else main repo
-        print(f"[download:{id}] Downloading mmproj '{mmproj}' from '{mmproj_repo}' into {dest_dir}", flush=True)
-        with open(log_path, 'a') as lf:
-            lf.write(f"\n[Fetching vision projector: {mmproj}]\n")
-
-        proc2 = subprocess.Popen(
-            build_cmd(mmproj_repo, mmproj),
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, bufsize=1,
-        )
-        with _lock:
-            _downloads[id]["proc"] = proc2
-
-        _stream_output(proc2, log_path, id, final=True)
+        _stream_output(proc, log_path, id, final=True)
 
     with _lock:
         _downloads[id] = {"proc": None, "log": log_path, "done": False}

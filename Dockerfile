@@ -1,19 +1,3 @@
-# --- STAGE 1: BUILDER ---
-# Use the 'devel' image to get nvcc and headers needed for compilation
-FROM nvidia/cuda:12.2.2-devel-ubuntu22.04 AS builder
-
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y python3-pip cmake git build-essential
-
-# Force llama-cpp-python to compile from source with CUDA support
-# This ensures we get the latest Qwen 3 VL architecture support
-ENV CMAKE_ARGS="-DGGML_CUDA=on"
-ENV FORCE_CMAKE=1
-
-RUN pip3 install --no-cache-dir wheel
-RUN pip3 wheel "llama-cpp-python[server]" --wheel-dir=/app/wheels
-
-# --- STAGE 2: FINAL RUNNER ---
 FROM nvidia/cuda:12.2.2-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -31,14 +15,9 @@ RUN apt-get update && apt-get install -y \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the pre-compiled wheel from the builder stage
-COPY --from=builder /app/wheels /tmp/wheels
-
-# Install standard dependencies + our custom-built llama-cpp-python
+# Install standard dependencies + vLLM natively
 RUN pip3 install --no-cache-dir \
-    huggingface_hub flask flask-cors \
-    /tmp/wheels/*.whl && \
-    rm -rf /tmp/wheels
+    huggingface_hub flask flask-cors vllm
 
 # Install FileBrowser Quantum (gtsteffaniak/filebrowser) - update version pin as needed
 RUN curl -fsSL https://github.com/gtsteffaniak/filebrowser/releases/download/v1.2.1-stable/linux-amd64-filebrowser \

@@ -1,26 +1,20 @@
 {
   "joycaption": {
     "name": "JoyCaption Beta One",
-    "repo": "concedo/llama-joycaption-beta-one-hf-llava-mmproj-gguf",
-    "file": "Llama-Joycaption-Beta-One-Hf-Llava-Q4_K_M.gguf",
-    "mmproj": "llama-joycaption-beta-one-llava-mmproj-model-f16.gguf",
-    "path": "{storage}/models/joycaption/llama-joycaption-beta-one-hf-llava-Q4_K_M.gguf",
-    "desc": "Purpose-built model for generating highly detailed natural-language image captions. (~4.9 GB)"
+    "repo": "John6666/llama-joycaption-beta-one-hf-llava-nf4",
+    "path": "{storage}/models/joycaption",
+    "desc": "Purpose-built model for generating detailed natural-language image captions. (~5.4 GB NF4 quantized)"
   },
-  "qwen25vl": {
-    "name": "Qwen2.5-VL 7B",
-    "repo": "bartowski/Qwen_Qwen2.5-VL-7B-Instruct-GGUF",
-    "file": "Qwen_Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf",
-    "mmproj": "mmproj-Qwen_Qwen2.5-VL-7B-Instruct-f16.gguf",
-    "path": "{storage}/models/qwen25vl/Qwen_Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf",
-    "desc": "General vision model. Good for structured descriptions, OCR, and scene analysis. (~4.5 GB + 1.3 GB projector)"
+  "qwen3vl_base": {
+    "name": "Qwen3-VL 8B Instruct",
+    "repo": "cyankiwi/Qwen3-VL-8B-Instruct-AWQ-4bit",
+    "path": "{storage}/models/qwen3vl_base",
+    "desc": "Highly capable general vision model. (~6.2 GB AWQ 4-bit quantized)"
   },
-  "qwen3vl": {
-    "name": "Qwen3-VL 8B Abliterated",
-    "repo": "mradermacher/Huihui-Qwen3-VL-8B-Instruct-abliterated-GGUF",
-    "file": "Huihui-Qwen3-VL-8B-Instruct-abliterated.Q4_K_M.gguf",
-    "mmproj": "Huihui-Qwen3-VL-8B-Instruct-abliterated.mmproj-Q8_0.gguf",
-    "path": "{storage}/models/qwen3vl/Huihui-Qwen3-VL-8B-Instruct-abliterated.Q4_K_M.gguf",
-    "desc": "Improved general vision model. Fewer limitations than Qwen2.5-VL. (~5.0 GB + 0.7 GB projector)"
+  "qwen3vl_ablit": {
+    "name": "Qwen3-VL 8B Thinking Abliterated",
+    "repo": "nicklas373/Huihui-Qwen3-VL-8B-Thinking-abliterated-AWQ",
+    "path": "{storage}/models/qwen3vl_ablit",
+    "desc": "Highly capable general vision model with abliteration. (~5.8 GB AWQ 4-bit quantized)"
   }
 }

@@ -758,10 +758,72 @@
             } catch (e) { log('Error saving config: ' + e.message, 'error'); }
         }
 
+        // ── Engine Management ─────────────────────────────────────
+        async function startEngine(modelId) {
+            log(`Starting LLM engine with model: ${modelId}...`, 'info');
+            const res = await fetch(`/api/coordinator/engine/start`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model: modelId })
+            });
+            const data = await res.json();
+            if (data.status === 'error') {
+                throw new Error(data.detail || 'Failed to start engine');
+            }
+            if (data.status === 'already_running' && data.model !== modelId) {
+                throw new Error(`Engine is already running with a different model (${data.model}). Please stop it first.`);
+            }
+
+            log('Waiting for engine to load weights (this may take up to a minute)...', 'info');
+
+            // Poll /api/status until engine_status === 'RUNNING' and engine === true
+            while (true) {
+                await new Promise(r => setTimeout(r, 2500));
+                try {
+                    // Need to hit the coordinator directly
+                    const stRes = await fetch(getToolUrl(80) + '/api/status');
+                    const st = await stRes.json();
+                    if (st.engine_status === 'ERROR') {
+                        throw new Error('Engine failed to start. Check logs.');
+                    }
+                    if (st.engine && st.engine_status === 'RUNNING' && st.engine_model === modelId) {
+                        log('Engine is ready and responding!', 'complete');
+                        break;
+                    } else if (st.engine_status === 'BOOTING') {
+                        // Just keep waiting
+                    }
+                } catch (e) { /* ignore network errors during boot */ }
+            }
+        }
+
+        async function stopEngine() {
+            try {
+                // If it's already stopped, don't bother logging it, but safe to call
+                await fetch(`/api/coordinator/engine/stop`, { method: 'POST' });
+                log('Engine stopped (VRAM freed).', 'info');
+            } catch (e) { log('Error stopping engine: ' + e.message, 'error'); }
+        }
+
         // ── Captioning ────────────────────────────────────────────
         async function startCaptioning() {
             await saveConfig();
             setRunning(true);
+
+            const selectedModel = document.getElementById('model').value;
+            if (!selectedModel) {
+                log('No model selected. Cannot start captioning.', 'error');
+                setRunning(false);
+                return;
+            }
+
+            try {
+                await startEngine(selectedModel);
+            } catch (e) {
+                log(e.message, 'error');
+                setRunning(false);
+                return;
+            }
+
             log('─── Starting captioning job ───', 'info');
 
             if (eventSource) eventSource.close();
@@ -774,14 +836,17 @@
                     log('─── Captioning complete. ───', 'complete');
                     setRunning(false);
                     eventSource.close();
+                    stopEngine();
                 } else if (msg.startsWith('[CANCELLED]')) {
                     log('─── Captioning cancelled. ───', 'cancelled');
                     setRunning(false);
                     eventSource.close();
+                    stopEngine();
                 } else if (msg.startsWith('[ERROR]')) {
                     log(msg, 'error');
                     setRunning(false);
                     eventSource.close();
+                    stopEngine();
                 } else if (msg.startsWith('[STARTED]')) {
                     log(msg.replace('[STARTED]', '').trim(), 'info');
                 } else {
@@ -793,6 +858,7 @@
                 if (!captioningRunning) return;
                 log('Connection lost or captioning ended.', 'error');
                 setRunning(false);
+                stopEngine();
             };
         }
 
@@ -800,6 +866,8 @@
             try {
                 await fetch('/api/stop', { method: 'POST' });
                 log('Stop signal sent…', 'info');
+                // The backend will send [CANCELLED] through the eventSource,
+                // which will trigger stopEngine() automatically.
             } catch (e) { log('Error sending stop: ' + e.message, 'error'); }
         }
 
