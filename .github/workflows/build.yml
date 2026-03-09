@@ -1,4 +1,4 @@
-name: Build and Push AI Suite
+name: Build and Push Training Kitchen
 
 on:
   push:

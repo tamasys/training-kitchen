@@ -1,4 +1,19 @@
-# --- FINAL RUNNER ---
+# --- STAGE 1: BUILDER ---
+# Use the 'devel' image to get nvcc and headers needed for compilation
+FROM nvidia/cuda:12.2.2-devel-ubuntu22.04 AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y python3-pip cmake git build-essential
+
+# Force llama-cpp-python to compile from source with CUDA support
+# This ensures we get the latest Qwen 3 VL architecture support
+ENV CMAKE_ARGS="-DGGML_CUDA=on"
+ENV FORCE_CMAKE=1
+
+RUN pip3 install --no-cache-dir wheel
+RUN pip3 wheel "llama-cpp-python[server]" --wheel-dir=/app/wheels
+
+# --- STAGE 2: FINAL RUNNER ---
 FROM nvidia/cuda:12.2.2-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -8,7 +23,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # /usr/local/cuda/lib64 covers any CUDA runtime libs baked into the base image.
 ENV LD_LIBRARY_PATH=/usr/local/nvidia/lib64:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
 
-# Runtime dependencies + Node.js 18 (required for ai-toolkit UI)
+# Runtime dependencies + Node.js 18
 RUN apt-get update && apt-get install -y \
     python3-pip git curl nginx supervisor \
     libgl1-mesa-glx libglib2.0-0 jq \
@@ -16,11 +31,14 @@ RUN apt-get update && apt-get install -y \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies including llama-cpp-python pre-built wheel for CUDA 12.2
+# Copy the pre-compiled wheel from the builder stage
+COPY --from=builder /app/wheels /tmp/wheels
+
+# Install standard dependencies + our custom-built llama-cpp-python
 RUN pip3 install --no-cache-dir \
     huggingface_hub flask flask-cors \
-    "llama-cpp-python[server]" \
-    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu122
+    /tmp/wheels/*.whl && \
+    rm -rf /tmp/wheels
 
 # Install FileBrowser Quantum (gtsteffaniak/filebrowser) - update version pin as needed
 RUN curl -fsSL https://github.com/gtsteffaniak/filebrowser/releases/download/v1.2.1-stable/linux-amd64-filebrowser \
@@ -37,17 +55,10 @@ RUN git clone --depth=1 https://github.com/victorchall/vlm-caption.git /app/vlm-
     pip3 install -q --no-cache-dir -r /app/vlm-caption/requirements.txt && \
     rm -f /app/vlm-caption/caption.yaml   # never bake in a stale working config
 
-# flux_train_ui.py used an old Gradio API - removed, using the real Node.js UI instead
-
-# Copy app files (separate layer so upstream repo changes don't bust this cache)
 WORKDIR /app
 COPY . .
 RUN chmod +x start.sh scripts/updater.sh && \
-    rm -f /app/vlm-caption/caption.yaml   # safety net: COPY . . can't add it, but be explicit
-
-# Note: vlm-caption/init.yaml is generated at container startup by start.sh,
-# substituting $STORAGE_DIR into the template at config/vlm-caption-init.yaml.
-# This ensures the default base_directory is always correct for the actual mount path.
+    rm -f /app/vlm-caption/caption.yaml
 
 # Install nginx dashboard config and remove default site
 RUN rm -f /etc/nginx/sites-enabled/default && \
