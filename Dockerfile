@@ -20,7 +20,7 @@ RUN pip3 install --no-cache-dir \
     huggingface_hub flask flask-cors vllm
 
 # Install FileBrowser Quantum (gtsteffaniak/filebrowser) - update version pin as needed
-RUN curl -fsSL https://github.com/gtsteffaniak/filebrowser/releases/download/v1.2.1-stable/linux-amd64-filebrowser \
+RUN curl -fsSL https://github.com/gtsteffaniak/filebrowser/releases/download/v1.2.2-stable/linux-amd64-filebrowser \
     -o /usr/local/bin/filebrowser && \
     chmod +x /usr/local/bin/filebrowser
 
