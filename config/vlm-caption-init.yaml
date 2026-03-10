@@ -13,7 +13,7 @@ api_key_env_vars:
 - MY_API_KEY_ENV_VAR_NAME
 model: ''
 api_key: ''
-max_tokens: 16384
+max_tokens: 4096
 system_prompt: "You are to analyze an image and provide information based on what
   is visible in the image. Do not embellish, and avoid language like 'showcases'
   or 'features,' preferring to focus on factual information. Make sure anything that
@@ -40,3 +40,4 @@ base_directory: __STORAGE_DIR__/images
 recursive: true
 skip_if_txt_exists: true
 concurrent_batch_size: 4
+enable_thinking: false

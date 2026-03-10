@@ -378,6 +378,9 @@
 
     <div class="card" style="margin-bottom: 2rem; border-color: #c6b89e44;">
         <h3 style="margin-top:0;">Captioning Model Engine</h3>
+        <select id="engine-model" class="autostop-select" style="margin-bottom: 0.5rem; width: 100%; padding: 0.75rem;">
+            <option value="">Loading models...</option>
+        </select>
         <p id="vram-info" class="status">Checking engine...</p>
         <button id="vram-btn" class="btn btn-vram" onclick="toggleEngine()">Wait...</button>
     </div>
@@ -605,7 +608,7 @@
                 // If UI thinks it's starting but server says stopped, the start command
                 // hasn't taken effect yet; keep the UI in the starting state.
                 const serverStatus = data.engine_status || (data.engine ? 'RUNNING' : 'STOPPED');
-                if (engineStatus === 'STARTING' && serverStatus === 'STOPPED') {
+                if ((engineStatus === 'STARTING' || engineStatus === 'BOOTING') && serverStatus === 'STOPPED') {
                     // Do not update engineStatus, wait for it to actually start
                 } else {
                     engineStatus = serverStatus;
@@ -614,21 +617,49 @@
 
                 const info = document.getElementById('vram-info');
                 const vBtn = document.getElementById('vram-btn');
+                const select = document.getElementById('engine-model');
+
+                // Populate model dropdown first
+                if (select.options.length <= 1 && select.options[0].value === "") {
+                    select.innerHTML = '';
+                    let hasModels = false;
+                    Object.entries(data.models).forEach(([id, m]) => {
+                        if (m.installed) {
+                            const opt = document.createElement('option');
+                            opt.value = id;
+                            opt.textContent = m.name;
+                            select.appendChild(opt);
+                            hasModels = true;
+                        }
+                    });
+                    if (!hasModels) {
+                        select.innerHTML = '<option value="">No models installed. Download below.</option>';
+                        select.disabled = true;
+                    }
+                }
 
                 if (engineStatus === 'RUNNING') {
+                    if (data.engine_model) select.value = data.engine_model;
+                    select.disabled = true;
+                    select.style.opacity = '0.5';
                     info.textContent = '🔴 ENGINE ACTIVE — consuming VRAM';
                     info.style.color = '';
                     vBtn.textContent = 'STOP ENGINE';
                     vBtn.style.background = '#ef4444';
                     vBtn.disabled = false;
                     stopFastPoll();
-                } else if (engineStatus === 'STARTING') {
+                } else if (engineStatus === 'STARTING' || engineStatus === 'BOOTING') {
+                    if (data.engine_model) select.value = data.engine_model;
+                    select.disabled = true;
+                    select.style.opacity = '0.5';
                     info.textContent = '⏳ Engine starting — loading model…';
                     info.style.color = '#fbbf24';
                     vBtn.textContent = '⏳ Starting…';
                     vBtn.style.background = '#78350f';
                     vBtn.disabled = true;
                 } else if (engineStatus === 'ERROR') {
+                    select.disabled = false;
+                    select.style.opacity = '1';
                     const detail = data.engine_output || '';
                     info.textContent = '❌ Engine failed to start' + (detail ? ': ' + detail : '');
                     info.style.color = '#f87171';
@@ -637,6 +668,8 @@
                     vBtn.disabled = false;
                     stopFastPoll();
                 } else {
+                    select.disabled = Object.keys(data.models).filter(k => data.models[k].installed).length === 0;
+                    select.style.opacity = '1';
                     info.textContent = '🟢 ENGINE STOPPED — VRAM clear for training';
                     info.style.color = '';
                     vBtn.textContent = 'START ENGINE';
@@ -717,16 +750,25 @@
 
         async function toggleEngine() {
             const action = running ? 'stop' : 'start';
+            const modelId = document.getElementById('engine-model').value;
             const vBtn = document.getElementById('vram-btn');
+            const select = document.getElementById('engine-model');
             const info = document.getElementById('vram-info');
 
             // Immediately reflect transitional state before request returns
+            engineStatus = action === 'start' ? 'STARTING' : 'STOPPING';
             vBtn.disabled = true;
+            select.disabled = true;
+            select.style.opacity = '0.5';
             vBtn.textContent = action === 'start' ? '⏳ Starting…' : '⏳ Stopping…';
             info.textContent = action === 'start' ? '⏳ Engine starting — loading model…' : '⏳ Stopping engine…';
             info.style.color = '#fbbf24';
 
-            const res = await fetch(`/api/engine/${action}`);
+            const res = await fetch(`/api/engine/${action}`, {
+                method: action === 'start' ? 'POST' : 'GET',
+                headers: action === 'start' ? { 'Content-Type': 'application/json' } : undefined,
+                body: action === 'start' ? JSON.stringify({ model: modelId }) : undefined
+            });
             const data = await res.json();
 
             if (data.status === 'error') {

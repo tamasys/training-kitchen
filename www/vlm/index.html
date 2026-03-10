@@ -511,10 +511,13 @@
                         style="background: var(--surface2); color: var(--muted); cursor: not-allowed;">
                 </div>
                 <div class="field">
-                    <label>Model</label>
-                    <select id="model">
-                        <option value="">Loading models...</option>
-                    </select>
+                    <label>Currently Running Engine</label>
+                    <input type="text" id="model" readonly
+                        style="background: var(--surface2); color: var(--muted); cursor: not-allowed;">
+                </div>
+                <div class="field">
+                    <label class="checkbox-row"><input type="checkbox" id="enable_thinking"> Enable Model Reasoning
+                        (Thinking) if Supported</label>
                 </div>
                 <div class="field">
                     <label>API Key (leave blank for local)</label>
@@ -613,39 +616,7 @@
         }
 
         async function loadModels() {
-            const select = document.getElementById('model');
-            try {
-                // Get models from the coordinator API. 
-                // Since we are moving this UI to 5002, we can't use /api/ directly if the coordinator is on 80.
-                // We use getToolUrl(80) to hit the main nginx reverse proxy.
-                const url = getToolUrl(80) + '/api/status';
-                const res = await fetch(url);
-                const data = await res.json();
-
-                select.innerHTML = '';
-
-                // Look for installed models
-                let hasModels = false;
-                Object.entries(data.models).forEach(([id, m]) => {
-                    if (m.installed) {
-                        const opt = document.createElement('option');
-                        opt.value = id;
-                        opt.textContent = m.name;
-                        select.appendChild(opt);
-                        hasModels = true;
-                    }
-                });
-
-                if (!hasModels) {
-                    const opt = document.createElement('option');
-                    opt.value = "";
-                    opt.textContent = "No models installed. Download from Dashboard.";
-                    select.appendChild(opt);
-                }
-            } catch (e) {
-                select.innerHTML = '<option value="">Failed to load models</option>';
-                log('Failed to fetch installed models from Coordinator API', 'error');
-            }
+            // Models are now selected from the main Dashboard. We just display the current one via pollStatus().
         }
 
         // ── Config ────────────────────────────────────────────────
@@ -689,25 +660,13 @@
                 // Always force Base URL to the correct internal LLM endpoint
                 document.getElementById('base_url').value = getToolUrl(5001) + '/v1';
 
-                // Set Model (if present in dropdown)
-                if (c.model) {
-                    const select = document.getElementById('model');
-                    // Ensure the option exists if it was saved, even if it's not "installed" right now
-                    if (!Array.from(select.options).some(opt => opt.value === c.model)) {
-                        const opt = document.createElement('option');
-                        opt.value = c.model;
-                        opt.textContent = c.model + ' (Offline)';
-                        select.appendChild(opt);
-                    }
-                    select.value = c.model;
-                }
-
                 document.getElementById('api_key').value = c.api_key || '';
                 document.getElementById('max_tokens').value = c.max_tokens || 4096;
                 document.getElementById('concurrent_batch_size').value = c.concurrent_batch_size || 1;
                 document.getElementById('system_prompt').value = c.system_prompt || '';
                 document.getElementById('recursive').checked = c.recursive !== false;
                 document.getElementById('skip_if_txt_exists').checked = c.skip_if_txt_exists !== false;
+                document.getElementById('enable_thinking').checked = c.enable_thinking !== false;
 
                 const container = document.getElementById('prompts-container');
                 container.innerHTML = '';
@@ -737,15 +696,16 @@
             const config = {
                 base_directory: document.getElementById('base_directory').value,
                 base_url: document.getElementById('base_url').value,
-                model: document.getElementById('model').value,
                 api_key: document.getElementById('api_key').value,
                 max_tokens: parseInt(document.getElementById('max_tokens').value),
                 concurrent_batch_size: parseInt(document.getElementById('concurrent_batch_size').value),
                 system_prompt: document.getElementById('system_prompt').value,
                 recursive: document.getElementById('recursive').checked,
                 skip_if_txt_exists: document.getElementById('skip_if_txt_exists').checked,
+                enable_thinking: document.getElementById('enable_thinking').checked,
                 prompts,
                 hint_sources: [...activeHintSources],
+                model: document.getElementById('model').value
             };
             try {
                 const res = await fetch('/api/config', {
@@ -759,73 +719,17 @@
         }
 
         // ── Engine Management ─────────────────────────────────────
-        async function startEngine(modelId) {
-            log(`Starting LLM engine with model: ${modelId}...`, 'info');
-            const res = await fetch(`/api/coordinator/engine/start`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ model: modelId })
-            });
-            const data = await res.json();
-            if (data.status === 'error') {
-                throw new Error(data.detail || 'Failed to start engine');
-            }
-            if (data.status === 'already_running' && data.model !== modelId) {
-                throw new Error(`Engine is already running with a different model (${data.model}). Please stop it first.`);
-            }
 
-            log('Waiting for engine to load weights (this may take up to a minute)...', 'info');
-
-            // Poll /api/status until engine_status === 'RUNNING' and engine === true
-            while (true) {
-                await new Promise(r => setTimeout(r, 2500));
-                try {
-                    // Need to hit the coordinator directly
-                    const stRes = await fetch(getToolUrl(80) + '/api/status');
-                    const st = await stRes.json();
-                    if (st.engine_status === 'ERROR' || st.engine_status === 'STOPPED') {
-                        throw new Error('Engine failed to start. Check logs.');
-                    }
-                    if (st.engine && st.engine_status === 'RUNNING' && st.engine_model === modelId) {
-                        log('Engine is ready and responding!', 'complete');
-                        break;
-                    } else if (st.engine_status === 'BOOTING') {
-                        // Just keep waiting
-                    }
-                } catch (e) {
-                    // If it's the throw above, re-throw it so the outer catch handles it
-                    if (e.message && e.message.includes('Engine failed to start')) {
-                        throw e;
-                    }
-                    /* otherwise ignore network errors during boot */
-                }
-            }
-        }
-
-        async function stopEngine() {
-            try {
-                // If it's already stopped, don't bother logging it, but safe to call
-                await fetch(`/api/coordinator/engine/stop`, { method: 'POST' });
-                log('Engine stopped (VRAM freed).', 'info');
-            } catch (e) { log('Error stopping engine: ' + e.message, 'error'); }
-        }
+        // stopEngine has been removed, dashboard controls engine lifecycle
 
         // ── Captioning ────────────────────────────────────────────
         async function startCaptioning() {
             await saveConfig();
             setRunning(true);
 
-            const selectedModel = document.getElementById('model').value;
-            if (!selectedModel) {
-                log('No model selected. Cannot start captioning.', 'error');
-                setRunning(false);
-                return;
-            }
-
-            try {
-                await startEngine(selectedModel);
-            } catch (e) {
-                log(e.message, 'error');
+            const runningModel = document.getElementById('model').value;
+            if (runningModel === 'None / Stopped' || runningModel === 'Engine is stopped. Start it from the Dashboard.') {
+                log('Engine is not running. Please start it from the Dashboard first.', 'error');
                 setRunning(false);
                 return;
             }
@@ -842,17 +746,14 @@
                     log('─── Captioning complete. ───', 'complete');
                     setRunning(false);
                     eventSource.close();
-                    stopEngine();
                 } else if (msg.startsWith('[CANCELLED]')) {
                     log('─── Captioning cancelled. ───', 'cancelled');
                     setRunning(false);
                     eventSource.close();
-                    stopEngine();
                 } else if (msg.startsWith('[ERROR]')) {
                     log(msg, 'error');
                     setRunning(false);
                     eventSource.close();
-                    stopEngine();
                 } else if (msg.startsWith('[STARTED]')) {
                     log(msg.replace('[STARTED]', '').trim(), 'info');
                 } else {
@@ -864,7 +765,6 @@
                 if (!captioningRunning) return;
                 log('Connection lost or captioning ended.', 'error');
                 setRunning(false);
-                stopEngine();
             };
         }
 
@@ -872,18 +772,22 @@
             try {
                 await fetch('/api/stop', { method: 'POST' });
                 log('Stop signal sent…', 'info');
-                // The backend will send [CANCELLED] through the eventSource,
-                // which will trigger stopEngine() automatically.
             } catch (e) { log('Error sending stop: ' + e.message, 'error'); }
         }
 
         // ── Status polling ─────────────────────────────────────────
         async function pollStatus() {
             try {
-                const res = await fetch('/api/status');
+                const res = await fetch(getToolUrl(80) + '/api/status');
                 const data = await res.json();
                 if (data.captioning_in_progress !== captioningRunning) {
                     setRunning(data.captioning_in_progress);
+                }
+                const modelInput = document.getElementById('model');
+                if (data.engine && data.engine_status === 'RUNNING') {
+                    modelInput.value = data.engine_model || 'Unknown';
+                } else {
+                    modelInput.value = 'Engine is stopped. Start it from the Dashboard.';
                 }
             } catch { /* backend not ready */ }
         }
@@ -927,6 +831,7 @@
             await loadModels(); // Load models dropdown first
             await loadHintSources();
             await loadConfig();
+            await pollStatus();
             setInterval(pollStatus, 5000);
         })();
     </script>

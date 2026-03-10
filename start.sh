@@ -37,6 +37,10 @@ if os.path.exists(caption_py):
         
     # Disable hardcoded debug logging that causes race conditions
     src = src.replace('save_debug_task = asyncio.create_task(write_debug_messages(messages, i))', 'save_debug_task = asyncio.sleep(0)')
+
+    # Enable thinking configuration toggle
+    if 'extra_body=' not in src:
+        src = src.replace('stream=True,', 'stream=True, extra_body={"chat_template_kwargs": {"enable_thinking": conf.get("enable_thinking", True)}},')
     
     with open(caption_py, "w") as f:
         f.write(src)
