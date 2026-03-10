@@ -351,7 +351,7 @@ def engine_ctl(action):
             '--host', '0.0.0.0',
             '--port', '5001',
             '--trust-remote-code',
-            '--limit-mm-per-prompt', 'image=1',
+            '--limit-mm-per-prompt', '{"image": 1}',
             '--max-model-len', '8192',
             '--gpu-memory-utilization', '0.90'
         ]

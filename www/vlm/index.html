@@ -783,7 +783,7 @@
                     // Need to hit the coordinator directly
                     const stRes = await fetch(getToolUrl(80) + '/api/status');
                     const st = await stRes.json();
-                    if (st.engine_status === 'ERROR') {
+                    if (st.engine_status === 'ERROR' || st.engine_status === 'STOPPED') {
                         throw new Error('Engine failed to start. Check logs.');
                     }
                     if (st.engine && st.engine_status === 'RUNNING' && st.engine_model === modelId) {
@@ -792,7 +792,13 @@
                     } else if (st.engine_status === 'BOOTING') {
                         // Just keep waiting
                     }
-                } catch (e) { /* ignore network errors during boot */ }
+                } catch (e) {
+                    // If it's the throw above, re-throw it so the outer catch handles it
+                    if (e.message && e.message.includes('Engine failed to start')) {
+                        throw e;
+                    }
+                    /* otherwise ignore network errors during boot */
+                }
             }
         }
 
