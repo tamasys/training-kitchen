@@ -32,27 +32,13 @@ if os.path.exists(caption_py):
     src = re.sub(r'"content": \[\{"type": "text", "text": (response_text|prompt)\}\]', r'"content": \1', src)
     
     # Inject stop tokens to prevent JoyCaption from hallucinating dialog continuations
-    if 'stop=["\\nUSER"' not in src:
+    if 'stop=["\\nUSER:"' not in src:
         src = src.replace('stream=True,', 'stream=True, stop=["\\nUSER:", "USER:", "  -  USER", "ASSISTANT:", "\\nASSISTANT"],')
         
     # Disable hardcoded debug logging that causes race conditions
     src = src.replace('save_debug_task = asyncio.create_task(write_debug_messages(messages, i))', 'save_debug_task = asyncio.sleep(0)')
     
     with open(caption_py, "w") as f:
-        f.write(src)
-
-file_access_py = "/app/vlm-caption/file_utils/file_access.py"
-if os.path.exists(file_access_py):
-    with open(file_access_py, "r") as f:
-        src = f.read()
-
-    # Enable .json debug output for conversation history tracing cleanly
-    src = src.replace('#debug_path = os.path.join(dir_name, f"{base_name}.log")', 'debug_path = os.path.join(dir_name, f"{base_name}.json")')
-    src = src.replace(
-        'async with aiofiles.open(txt_path, "w", encoding="utf-8") as f_cap:\n                #aiofiles.open(debug_path, "w", encoding="utf-8") as f_log:\n            #await asyncio.gather(f_cap.write(caption_text),f_log.write(debug_info))\n            await asyncio.gather(f_cap.write(caption_text))',
-        'async with aiofiles.open(txt_path, "w", encoding="utf-8") as f_cap, \\\n                   aiofiles.open(debug_path, "w", encoding="utf-8") as f_log:\n            await asyncio.gather(f_cap.write(caption_text), f_log.write(debug_info))'
-    )
-    with open(file_access_py, "w") as f:
         f.write(src)
 EOF
 python3 /tmp/patch_vlm.py
